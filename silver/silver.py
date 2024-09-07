@@ -105,11 +105,3 @@ class Silver:
     def __exit__(self, exc_type, exc_value, traceback):
         if self.stream and not self.stream.closed:
             self.stream.close()
-
-
-if __name__ == "__main__":
-    silver = Silver(
-        # "file:///Users/user/Downloads/morningloom.wav"
-        # "https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Samples/CCRMA/voxware.wav"
-        # "https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Samples/AFsp/M1F1-float32-AFsp.wav"
-    )
