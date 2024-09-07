@@ -1,5 +1,7 @@
 # File: fsig.py
 
+# TODO: current signature setup is very ugly
+#       figure out a better way of handling this
 SIGNATURES = (
     # WAV (WAVE)
     (("RIFF", 4, "WAVE", 4), "latin-1", "WAV"),

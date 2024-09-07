@@ -5,8 +5,9 @@ import io
 from pathlib import Path
 from typing import BinaryIO
 
-from .config import DEFAULT_CONFIG, InputSource
+from .config import configure_logging, DEFAULT_CONFIG, InputSource
 from .format import SilverFormat
+from .protocols import Protocol
 from .types import Source
 
 # FMAP =
@@ -14,14 +15,12 @@ from .types import Source
 
 class Silver:
     """
-    TODO
+    TODO: ...
     """
 
     config = DEFAULT_CONFIG.copy()
 
-    def __init__(
-        self, source: Source, url: bool = False, mode: int = None, output: int = None
-    ):
+    def __init__(self, source: Source, mode: int = None, output: int = None):
         """
         TODO
         """
@@ -30,14 +29,8 @@ class Silver:
                 f"Source must be one of the following types: str, Path, BinaryIO, bytes. Got {type(source)} instead."
             )
 
+        # # --- Parameter fields
         self.source = source
-        self.url = url
-
-        self.stream = None
-        self._initialize_stream()
-
-        self.stype = None
-        self._source_type()
 
         if mode:
             if mode not in [0, 1, 2]:
@@ -54,49 +47,44 @@ class Silver:
         else:
             self.output = DEFAULT_CONFIG["config"]["output_format"]
 
-        # ---
+        # --- Internal fields
+        self.logger = configure_logging(self.mode)
+        self.stream = None
+        self.stype = None
+        self._initialize_stream()
+
+        # --- Detected format field
         self.format = SilverFormat(self.stream).format
 
-        # ---
+        # --- Information fields
         # self.wave: Optional[SilverWave] = None
 
-    def _source_type(self):
-        """Determines the type of the source provided."""
-        match self.source:
-            case self.url:
-                self.stype = InputSource.URL.value
-            case str():
-                if self.source.is_dir() and self.source.exists():
-                    # self.config["config"]["input_source"]
-                    self.stype = InputSource.DIRECTORY.value
-                elif self.source.exists():
-                    self.stype = InputSource.FILE.value
-            case Path():
-                if self.source.is_dir() and self.source.exists():
-                    self.stype = InputSource.DIRECTORY.value
-                elif self.source.exists():
-                    self.stype = InputSource.FILE.value
-            case BinaryIO():
-                self.stype = InputSource.STREAM.value
-            case bytes():
-                self.stype = InputSource.BYTES.value
-
     def _initialize_stream(self):
-        if isinstance(self.source, str):
-            if self.url:
-                # self.stream = URLStream(self.source).urlstream()
-                pass
-            else:
-                self.source = Path(self.source)
-                self.stream: BinaryIO = self.source.open("rb")
-        elif isinstance(self.source, io.IOBase):
+        """Initializes the stream based on the source type."""
+        if isinstance(self.source, str) and self.source.startswith(
+            ("http://", "https://", "ftp://", "file://")
+        ):
+            proto = Protocol(self.source, self.logger)
+            self.stream = proto.get_stream()
+            self.stype = InputSource.URL.value
+        elif isinstance(self.source, str):
+            self.source = Path(self.source)
+            self.stream = self.source.open("rb")
+            self.stype = InputSource.FILE.value
+        elif isinstance(self.source, Path):
+            self.stream = self.source.open("rb")
+            self.stype = InputSource.FILE.value
+        elif isinstance(self.source, BinaryIO):
             self.stream = self.source
+            self.stype = InputSource.STREAM.value
         elif isinstance(self.source, bytes):
             self.stream = io.BytesIO(self.source)
+            self.stype = InputSource.BYTES.value
         else:
             raise TypeError("Source must be a file path, file-like object, or URL.")
 
         self.format = SilverFormat(self.stream).format
+        self.stype = self.stype
 
         # if self.format in FORMAP:
         # reader, attribute = FORMAP[self.format]
@@ -113,3 +101,11 @@ class Silver:
     def __exit__(self, exc_type, exc_value, traceback):
         if self.stream and not self.stream.closed:
             self.stream.close()
+
+
+if __name__ == "__main__":
+    silver = Silver(
+        "https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Samples/AFsp/M1F1-float32-AFsp.wav"
+    )
+    print(silver.format)
+    print(silver.stype)

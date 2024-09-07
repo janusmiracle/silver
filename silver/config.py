@@ -1,5 +1,6 @@
 # File: _config.py
 
+import logging
 import platform
 
 from datetime import datetime
@@ -32,7 +33,7 @@ class OutputFormat(Enum):
 
 DEFAULT_CONFIG_OPTIONS = {
     "input_source": InputSource.FILE.value,
-    "operation_mode": OperationMode.ABSOLUTE.value,  # Set to absolute during testing
+    "operation_mode": OperationMode.ABSOLUTE.value,  # --- Set to absolute during testing
     "output_format": OutputFormat.JSON.value,
 }
 
@@ -50,6 +51,8 @@ DEFAULT_CONFIG = {
     "execution_time": None,
 }
 
+
+# --- IGNORE
 CONFIG_OPTIONS_STRING = """
     input_source:
         0: file – Local file path.
@@ -68,3 +71,25 @@ CONFIG_OPTIONS_STRING = """
         1: YAML
         2: TOML
     """
+
+
+def configure_logging(mode: OperationMode):
+    """
+    Configures logging based on the provided operation mode.
+    """
+    logger = logging.getLogger()
+    logging.basicConfig()
+
+    if mode == OperationMode.ABSOLUTE.value:
+        logger.setLevel(logging.DEBUG)
+        requests_log = logging.getLogger("requests.packages.urllib3")
+        requests_log.setLevel(logging.DEBUG)
+        requests_log.propagate = True
+    elif mode == OperationMode.DEFAULT.value:
+        logger.setLevel(logging.INFO)
+    elif mode == OperationMode.MINIMAL:
+        logger.setLevel(logging.WARNING.value)
+    else:
+        raise ValueError(f"Unsupported operation mode: {mode}")
+
+    return logger
