@@ -84,7 +84,11 @@ class Silver:
             raise TypeError("Source must be a file path, file-like object, or URL.")
 
         self.format = SilverFormat(self.stream).format
+        self.logger.debug(f"Format detected: {self.format}")
+
         self.stype = self.stype
+        source_type = InputSource(self.stype)
+        self.logger.debug(f"Source type: {self.stype} (--{source_type.name})")
 
         # if self.format in FORMAP:
         # reader, attribute = FORMAP[self.format]
@@ -105,7 +109,7 @@ class Silver:
 
 if __name__ == "__main__":
     silver = Silver(
-        "https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Samples/AFsp/M1F1-float32-AFsp.wav"
+        # "file:///Users/user/Downloads/morningloom.wav"
+        # "https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Samples/CCRMA/voxware.wav"
+        # "https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Samples/AFsp/M1F1-float32-AFsp.wav"
     )
-    print(silver.format)
-    print(silver.stype)
