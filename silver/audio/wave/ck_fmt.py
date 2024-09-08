@@ -12,9 +12,9 @@ from .errors import PerverseError
 
 EXTENSIBLE = 65534
 
-WAVEFORMATPCM = "WaveFormatPCM"
-WAVEFORMATEXTENDED = "WaveFormatExtended"
-WAVEFORMATEXTENSIBLE = "WaveFormatExtensible"
+WAVE_FORMAT_PCM = "WaveFormatPCM"
+WAVE_FORMAT_EXTENDED = "WaveFormatExtended"
+WAVE_FORMAT_EXTENSIBLE = "WaveFormatExtensible"
 
 FORMAT_CHUNK_LOCATION = "['fmt ' / FORMAT]"
 
@@ -73,7 +73,7 @@ class WaveFormat:
         # -- Sanity
         self.sanity = None
 
-    def _get_endian(self) -> str:
+    def _get_ordersign(self) -> str:
         """Returns "<" for little-endian and ">" for big-endian."""
         if self.byteorder == "little":
             return "<"
@@ -84,7 +84,7 @@ class WaveFormat:
 
     def get_format(self) -> WaveFormatChunk:
         """Decodes the provided ['fmt' / FORMAT] chunk data."""
-        sign = self._get_endian()
+        sign = self._get_ordersign()
         default_pattern = f"{sign}HHIIHH"  # H = uint16_t, I = uint32_t
         self.sanity = []
         (
@@ -117,7 +117,7 @@ class WaveFormat:
                 error_message = f"AUDIO FORMAT (EXTENSIBLE / 65534 / 0xFFFE) MUST BE SIZE 40 NOT {self.size}"
                 self.sanity.append(PerverseError(location, error_message))
 
-            mode = WAVEFORMATEXTENSIBLE
+            mode = WAVE_FORMAT_EXTENSIBLE
 
             extension_size, valid_bits_per_sample, cmask = struct.unpack(
                 f"{sign}HHI", self.data[16:24]
@@ -138,7 +138,7 @@ class WaveFormat:
             subformat = {"audio_format": format_code, "guid": str(guid)}
 
         elif self.size == 18:
-            mode = WAVEFORMATEXTENDED
+            mode = WAVE_FORMAT_EXTENDED
 
             extension_size = struct.unpack(f"{sign}H", self.data[16:18])[0]
 
@@ -150,7 +150,7 @@ class WaveFormat:
                 )
                 self.sanity.append(PerverseError(location, error_message))
 
-            mode = WAVEFORMATPCM
+            mode = WAVE_FORMAT_PCM
 
         # TODO: Final format chunk sanity checks
 

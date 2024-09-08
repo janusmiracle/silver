@@ -16,7 +16,8 @@ HTTPS = "https"
 
 
 # TODO: FTP support + cleanup
-#
+
+
 class Protocol:
     """
     Fetches the contents of a given URL and returns them as a file-like stream.
