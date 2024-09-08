@@ -83,7 +83,7 @@ class WaveFormat:
             raise ValueError(f"Invalid byteorder input: {self.byteorder}")
 
     def get_format(self) -> WaveFormatChunk:
-        """Decodes the provided ['fmt' / FORMAT] chunk data."""
+        """Decodes the provided ['fmt ' / FORMAT] chunk data."""
         sign = self._get_ordersign()
         default_pattern = f"{sign}HHIIHH"  # H = uint16_t, I = uint32_t
         self.sanity = []

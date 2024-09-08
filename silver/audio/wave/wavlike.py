@@ -3,6 +3,7 @@
 from typing import Optional
 
 from .chunks import Chunky
+from .ck_data import WaveData, WaveDataChunk
 from .ck_fmt import WaveFormat, WaveFormatChunk
 
 
@@ -21,6 +22,10 @@ CHUNK_DECODERS = {
             identifier, size, data, byteorder
         ).format,
         "format",
+    ),
+    DATA_IDENTIFIER: (
+        lambda identifier, size, data: WaveData(identifier, size, data).data,
+        "data",
     ),
 }
 
@@ -45,7 +50,7 @@ class SilverWave:
         self.format: Optional[WaveFormatChunk] = None
 
         # Optional: Stores the data chunk ('data' chunk)
-        # self.data: Optional[WaveDataChunk] = None
+        self.data: Optional[WaveDataChunk] = None
 
         # Decode and set any existing chunks
         self.decode_chunks()
@@ -96,10 +101,8 @@ class SilverWave:
                     if attribute_name == DATA_IDENTIFIER:
                         data_size = size
 
-                    # if self.format is not None and self.data is not None:
-                    #    self.data.frame_count = int(
-                    #        data_size / self.format.format.block_align
-                    #    )
+                    if self.format is not None and self.data is not None:
+                        self.data.frame_count = int(data_size / self.format.block_align)
 
                     continue
 
