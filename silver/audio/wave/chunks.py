@@ -83,8 +83,8 @@ class Chunky:
                 break
 
             chunk_size = int.from_bytes(size_bytes, byteorder)
-            # Account for padding byte if data chunk size is odd
-            if chunk_identifier == "data" and chunk_size % 2 != 0:
+            # Account for padding or null bytes if chunk_size is odd
+            if chunk_size % 2 != 0:
                 chunk_size += 1
 
             # Decoding will be handled by chunk-specific decoders
