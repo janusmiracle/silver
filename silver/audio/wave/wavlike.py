@@ -4,6 +4,7 @@ from typing import Optional
 
 from chunks import Chunky
 from ck_data import WaveData, WaveDataChunk
+from ck_fact import WaveFact, WaveFactChunk
 from ck_fmt import WaveFormat, WaveFormatChunk
 from ck_info import WaveInfo, WaveInfoChunk
 
@@ -13,6 +14,8 @@ FMT_IDENTIFIER = "fmt "
 DATA_IDENTIFIER = "data"
 FACT_IDENTIFIER = "fact"
 INFO_IDENTIFIER = "INFO"
+
+# -- ..zz
 LIST_IDENTIFIER = "LIST"
 
 
@@ -27,6 +30,12 @@ CHUNK_DECODERS = {
     DATA_IDENTIFIER: (
         lambda identifier, size, data: WaveData(identifier, size, data).data,
         "data",
+    ),
+    FACT_IDENTIFIER: (
+        lambda identifier, size, data, byteorder: WaveFact(
+            identifier, size, data, byteorder
+        ).fact,
+        "fact",
     ),
     INFO_IDENTIFIER: (
         lambda identifier, size, data, byteorder: WaveInfo(
@@ -59,6 +68,9 @@ class SWave:
         # Optional: Stores the data chunk ('data' chunk)
         self.data: Optional[WaveDataChunk] = None
 
+        # Optional: Stores the fact chunk ('fact' chunk)
+        self.fact: Optional[WaveFactChunk] = None
+
         # Optional: Stores the info chunk ('INFO' chunk)
         self.info: Optional[WaveInfoChunk] = None
 
@@ -88,7 +100,7 @@ class SWave:
         """
         if not to_yield:
             for identifier, size, data in self.chunks:
-                if identifier == "LIST":
+                if identifier == LIST_IDENTIFIER:
                     # Determine the list-type (such as INFO)
                     identifier = data[:4].decode(self.encoding).strip()
                     data = data[4:]

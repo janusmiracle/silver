@@ -51,7 +51,7 @@ class WaveInfo:
         self.data = data
         self.byteorder = byteorder
 
-        # -- Info chunk data field
+        # -- Info chunk info field
         self.info = WaveInfoChunk(self.identifier, self.size)
 
         self.set_info()
