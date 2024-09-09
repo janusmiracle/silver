@@ -130,10 +130,13 @@ class WaveInfo:
 
             tag_size = int.from_bytes(size_bytes, self.byteorder)
             # Account for padding or null bytes if chunk_size is odd
-            # if tag_size % 2 != 0:
-            # tag_size += 1
+            if tag_size % 2 != 0:
+                tag_size += 1
 
             data_bytes = stream.read(tag_size)
+            try:
+                tag_data = data_bytes.decode("ascii").rstrip("\x00")
+            except Exception:
+                tag_data = data_bytes.decode("latin-1").rstrip("\x00")
 
-            tag_data = data_bytes.decode("ascii").rstrip("\x00")
             yield (tag_identifier, tag_size, tag_data)

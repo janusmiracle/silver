@@ -1,5 +1,6 @@
 # File: audio/wave/wavlike.py
 
+from dataclasses import dataclass
 from typing import Optional
 
 from chunks import Chunky
@@ -7,6 +8,13 @@ from ck_data import WaveData, WaveDataChunk
 from ck_fact import WaveFact, WaveFactChunk
 from ck_fmt import WaveFormat, WaveFormatChunk
 from ck_info import WaveInfo, WaveInfoChunk
+
+
+@dataclass
+class GenericChunk:
+    identifier: str
+    size: int
+    data: bytes
 
 
 # General WAV Chunk Identifiers
@@ -129,6 +137,10 @@ class SWave:
 
                     continue
 
+                elif decoder is None:
+                    # Create a generic_chunk and set the attribute to it
+                    # GenericChunk will correspond with unsupported/unimplemented chunks
+                    pass
         else:
             chunky = Chunky()
             for identifier, size, data in chunky.get_chunks(self.stream):
