@@ -2,9 +2,10 @@
 
 from typing import Optional
 
-from .chunks import Chunky
-from .ck_data import WaveData, WaveDataChunk
-from .ck_fmt import WaveFormat, WaveFormatChunk
+from chunks import Chunky
+from ck_data import WaveData, WaveDataChunk
+from ck_fmt import WaveFormat, WaveFormatChunk
+from ck_info import WaveInfo, WaveInfoChunk
 
 
 # General WAV Chunk Identifiers
@@ -27,30 +28,39 @@ CHUNK_DECODERS = {
         lambda identifier, size, data: WaveData(identifier, size, data).data,
         "data",
     ),
+    INFO_IDENTIFIER: (
+        lambda identifier, size, data, byteorder: WaveInfo(
+            identifier, size, data, byteorder
+        ).info,
+        "info",
+    ),
 }
 
 
-class SilverWave:
+class SWave:
     """
     TODO: write stuff here
     """
 
     def __init__(self, stream, encoding="latin-1"):
 
-        # -- Paremeter field
+        # -- Paremeter fields
         self.stream = stream
         self.encoding = encoding
 
         # -- Chunk retrieval field
         self.chunks, self.master, self.byteorder, self.formtype = self._get_chunks()
 
-        # -- Chunk field
+        # -- Chunk fields
 
         # Optional: Stores the format chunk ('fmt ' chunk)
         self.format: Optional[WaveFormatChunk] = None
 
         # Optional: Stores the data chunk ('data' chunk)
         self.data: Optional[WaveDataChunk] = None
+
+        # Optional: Stores the info chunk ('INFO' chunk)
+        self.info: Optional[WaveInfoChunk] = None
 
         # Decode and set any existing chunks
         self.decode_chunks()
@@ -89,14 +99,15 @@ class SilverWave:
                 decoder, attribute_name = CHUNK_DECODERS.get(identifier, (None, None))
 
                 if decoder is not None and attribute_name is not None:
-                    if identifier == FMT_IDENTIFIER:
+                    if identifier == DATA_IDENTIFIER:
+                        setattr(self, attribute_name, decoder(identifier, size, data))
+
+                    else:
                         setattr(
                             self,
                             attribute_name,
                             decoder(identifier, size, data, self.byteorder),
                         )
-                    else:
-                        setattr(self, attribute_name, decoder(identifier, size, data))
 
                     if attribute_name == DATA_IDENTIFIER:
                         data_size = size

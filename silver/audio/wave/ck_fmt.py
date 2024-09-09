@@ -6,8 +6,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from ._format_codes import CHANNEL_MASK_BMAP, FORMAT_ENCODINGS
-from .errors import PerverseError
+from _format_codes import CHANNEL_MASK_BMAP, FORMAT_ENCODINGS
+from errors import PerverseError
 
 
 EXTENSIBLE = 65534
@@ -59,13 +59,13 @@ class WaveFormat:
 
     def __init__(self, identifier: str, size: int, data: bytes, byteorder: str):
 
-        # -- Parameter field
+        # -- Parameter fields
         self.identifier = identifier
         self.size = size
         self.data = data
         self.byteorder = byteorder
 
-        # -- Format chunk info field
+        # -- Format chunk info fields
         self.format = self.get_format()
         self.bitrate = self.format.byte_rate * 8
         self.bitrate_long = f"{self.bitrate / 1000} kb/s"
