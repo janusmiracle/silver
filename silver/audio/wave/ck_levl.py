@@ -5,8 +5,8 @@ import struct
 from dataclasses import dataclass
 
 
-# Going off of: https://tech.ebu.ch/docs/tech/tech3285s3.pdf
-# TODO: fix the names for everything(e.g. position = audio_sample_frame_index?)
+# Source: https://tech.ebu.ch/docs/tech/tech3285s3.pdf
+# TODO: fix the names for everything (e.g. position = audio_sample_frame_index?)
 # The decoding seems to work(?)
 UNKNOWN_POSITIONS = "0xffffffff"  # -1 -- 0xFFFFFFFF
 
@@ -22,7 +22,7 @@ class WavePeakEnvelopeChunk:
     points_per_value: int       # 1 or 2
     block_size: int             # Default: 256
     channel_count: int
-    frame_count: int       # pfc = (num)
+    frame_count: int
     # audio_frame_count: int    # block_size * peak_channel_count * peak_frame_count
     position: int
     offset: int 
@@ -52,7 +52,7 @@ class WavePeakEnvelope:
         """
         Decodes the provided ['levl' / PEAK ENVELOPE] chunk data.
         """
-        default_pattern = f"<IIIIIIII"
+        default_pattern = "<IIIIIIII"
         # Must be little-endian, so no _get_ordersign() needed
         (
             version,

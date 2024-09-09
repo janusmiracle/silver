@@ -84,7 +84,9 @@ class Chunky:
 
             chunk_size = int.from_bytes(size_bytes, byteorder)
             # Account for padding or null bytes if chunk_size is odd
-            if chunk_size % 2 != 0:
+            # NOTE: It seems that the `bext` chunk does not follow the
+            # "All chunks MUST have an even size" rule, so it is ignored
+            if chunk_size % 2 != 0 and chunk_identifier != "bext":
                 chunk_size += 1
 
             # Decoding will be handled by chunk-specific decoders
