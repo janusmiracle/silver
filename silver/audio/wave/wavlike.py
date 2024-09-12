@@ -6,6 +6,7 @@ from typing import Optional
 from chunks import Chunky
 from ck_acid import WaveAcid, WaveAcidChunk
 from ck_cart import WaveCart, WaveCartChunk
+from ck_chna import WaveChna, WaveChnaChunk
 from ck_data import WaveData, WaveDataChunk
 from ck_fact import WaveFact, WaveFactChunk
 from ck_fmt import WaveFormat, WaveFormatChunk
@@ -37,6 +38,7 @@ LEVL_IDENTIFIER = "levl"
 SMPL_IDENTIFIER = "smpl"
 ACID_IDENTIFIER = "acid"
 CART_IDENTIFIER = "cart"
+CHNA_IDENTIFIER = "chna"
 
 # -- Chunk specific decoders
 CHUNK_DECODERS = {
@@ -73,6 +75,12 @@ CHUNK_DECODERS = {
             identifier, size, data, byteorder
         ).cart,
         "cart",
+    ),
+    CHNA_IDENTIFIER: (
+        lambda identifier, size, data, byteorder: WaveChna(
+            identifier, size, data, byteorder
+        ).chna,
+        "chna",
     ),
     INST_IDENTIFIER: (
         lambda identifier, size, data, byteorder: WaveInstrument(
@@ -137,6 +145,9 @@ class SWave:
 
         # Optional: Stores the cart chunk ('cart' chunk)
         self.cart: Optional[WaveCartChunk] = None
+
+        # Optional: Stores the chna chunk ('chna' chunk)
+        self.chna: Optional[WaveChnaChunk] = None
 
         # Decode and set any existing chunks
         self.decode_chunks()
