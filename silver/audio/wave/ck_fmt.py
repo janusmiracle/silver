@@ -111,6 +111,10 @@ class WaveFormat:
             error_message = "NON-PCM FORMATS MUST CONTAIN AN EXTENSION FIELD."
             self.sanity.append(PerverseError(location, error_message))
 
+            # ..zz: The 'Hard Hard_Vox.wav' file has IEEE float, but no extended field
+            # Should a PerverseMode be created rather than setting it to None?
+            mode = None
+
         elif audio_format == EXTENSIBLE:
             if self.size != 40:
                 location = f"{FORMAT_CHUNK_LOCATION} -- AUDIO FORMAT / SIZE"

@@ -9,6 +9,7 @@ from ck_fact import WaveFact, WaveFactChunk
 from ck_fmt import WaveFormat, WaveFormatChunk
 from ck_info import WaveInfo, WaveInfoChunk
 from ck_levl import WavePeakEnvelope, WavePeakEnvelopeChunk
+from ck_smpl import WaveSample, WaveSampleChunk
 
 
 @dataclass
@@ -29,6 +30,7 @@ LIST_IDENTIFIER = "LIST"
 
 # --
 LEVL_IDENTIFIER = "levl"
+SMPL_IDENTIFIER = "smpl"
 
 # -- Chunk specific decoders
 CHUNK_DECODERS = {
@@ -59,6 +61,12 @@ CHUNK_DECODERS = {
             identifier, size, data, byteorder
         ).peak_envelope,
         "levl",
+    ),
+    SMPL_IDENTIFIER: (
+        lambda identifier, size, data, byteorder: WaveSample(
+            identifier, size, data, byteorder
+        ).sample,
+        "smpl",
     ),
 }
 
@@ -94,6 +102,8 @@ class SWave:
         # Optional: Stores the peak envelope chunk ('levl' chunk)
         self.levl: Optional[WavePeakEnvelopeChunk] = None
 
+        # Optional: Stores the sample chunk ('smpl' chunk)
+        self.smpl: Optional[WaveSampleChunk] = None
         # Decode and set any existing chunks
         self.decode_chunks()
         # Get all existing chunk identifiers (including LIST chunk list type)
@@ -122,11 +132,14 @@ class SWave:
             for identifier, size, data in self.chunks:
                 if identifier == LIST_IDENTIFIER:
                     # Determine the list-type (such as INFO)
-                    identifier = data[:4].decode(self.encoding).strip()
-                    data = data[4:]
+                    list_type = data[:4].decode(self.encoding).strip()
+                    lt_data = data[4:]
+
+                    # Find LIST so INFO can be inserted right after
+                    list_index = self.chunks.index((identifier, size, data))
                     # Append the list with the sub-chunk
                     # -12 = 'LIST' (4) size (4) list-type (4)
-                    self.chunks.append((identifier, size - 12, data))
+                    self.chunks.insert(list_index + 1, (list_type, size - 12, lt_data))
 
                 decoder, attribute_name = CHUNK_DECODERS.get(identifier, (None, None))
 
