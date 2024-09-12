@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from chunks import Chunky
+from ck_acid import WaveAcid, WaveAcidChunk
 from ck_data import WaveData, WaveDataChunk
 from ck_fact import WaveFact, WaveFactChunk
 from ck_fmt import WaveFormat, WaveFormatChunk
@@ -33,7 +34,7 @@ LIST_IDENTIFIER = "LIST"
 INST_IDENTIFIER = "inst"
 LEVL_IDENTIFIER = "levl"
 SMPL_IDENTIFIER = "smpl"
-
+ACID_IDENTIFIER = "acid"
 
 # -- Chunk specific decoders
 CHUNK_DECODERS = {
@@ -58,6 +59,12 @@ CHUNK_DECODERS = {
             identifier, size, data, byteorder
         ).info,
         "info",
+    ),
+    ACID_IDENTIFIER: (
+        lambda identifier, size, data, byteorder: WaveAcid(
+            identifier, size, data, byteorder
+        ).acid,
+        "acid",
     ),
     INST_IDENTIFIER: (
         lambda identifier, size, data, byteorder: WaveInstrument(
@@ -116,6 +123,10 @@ class SWave:
 
         # Optional: Stores the sample chunk ('smpl' chunk)
         self.smpl: Optional[WaveSampleChunk] = None
+
+        # Optional: Stores the acid chunk ('acid' chunk)
+        self.acid: Optional[WaveAcidChunk] = None
+
         # Decode and set any existing chunks
         self.decode_chunks()
         # Get all existing chunk identifiers (including LIST chunk list type)
