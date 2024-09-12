@@ -8,6 +8,7 @@ from ck_data import WaveData, WaveDataChunk
 from ck_fact import WaveFact, WaveFactChunk
 from ck_fmt import WaveFormat, WaveFormatChunk
 from ck_info import WaveInfo, WaveInfoChunk
+from ck_inst import WaveInstrument, WaveInstrumentChunk
 from ck_levl import WavePeakEnvelope, WavePeakEnvelopeChunk
 from ck_smpl import WaveSample, WaveSampleChunk
 
@@ -29,8 +30,10 @@ INFO_IDENTIFIER = "INFO"
 LIST_IDENTIFIER = "LIST"
 
 # --
+INST_IDENTIFIER = "inst"
 LEVL_IDENTIFIER = "levl"
 SMPL_IDENTIFIER = "smpl"
+
 
 # -- Chunk specific decoders
 CHUNK_DECODERS = {
@@ -55,6 +58,12 @@ CHUNK_DECODERS = {
             identifier, size, data, byteorder
         ).info,
         "info",
+    ),
+    INST_IDENTIFIER: (
+        lambda identifier, size, data, byteorder: WaveInstrument(
+            identifier, size, data, byteorder
+        ).instrument,
+        "inst",
     ),
     LEVL_IDENTIFIER: (
         lambda identifier, size, data, byteorder: WavePeakEnvelope(
@@ -98,6 +107,9 @@ class SWave:
 
         # Optional: Stores the info chunk ('INFO' chunk)
         self.info: Optional[WaveInfoChunk] = None
+
+        # Optional: Stores the instrument chunk ('inst' chunk)
+        self.inst: Optional[WaveInstrumentChunk] = None
 
         # Optional: Stores the peak envelope chunk ('levl' chunk)
         self.levl: Optional[WavePeakEnvelopeChunk] = None

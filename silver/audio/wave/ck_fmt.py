@@ -33,7 +33,7 @@ class WaveFormatChunk:
     sample_rate: int
     byte_rate: int
     block_align: int
-    bits_per_sample: int
+    bitdepth: int
 
     # Extended/Extensible info
     extension_size: Optional[int] = None
@@ -168,7 +168,7 @@ class WaveFormat:
             sample_rate=sample_rate,
             byte_rate=byte_rate,
             block_align=block_align,
-            bits_per_sample=bits_per_sample,
+            bitdepth=bits_per_sample,
             extension_size=extension_size,
             valid_bits_per_sample=valid_bits_per_sample,
             channel_mask=channel_mask,
