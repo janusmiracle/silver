@@ -14,6 +14,7 @@ from ck_info import WaveInfo, WaveInfoChunk
 from ck_inst import WaveInstrument, WaveInstrumentChunk
 from ck_levl import WavePeakEnvelope, WavePeakEnvelopeChunk
 from ck_smpl import WaveSample, WaveSampleChunk
+from ck_strc import WaveStrc, WaveStrcChunk
 
 
 @dataclass
@@ -39,6 +40,7 @@ SMPL_IDENTIFIER = "smpl"
 ACID_IDENTIFIER = "acid"
 CART_IDENTIFIER = "cart"
 CHNA_IDENTIFIER = "chna"
+STRC_IDENTIFIER = "strc"
 
 # -- Chunk specific decoders
 CHUNK_DECODERS = {
@@ -100,6 +102,12 @@ CHUNK_DECODERS = {
         ).sample,
         "smpl",
     ),
+    STRC_IDENTIFIER: (
+        lambda identifier, size, data, byteorder: WaveStrc(
+            identifier, size, data, byteorder
+        ).strc,
+        "strc",
+    ),
 }
 
 
@@ -148,6 +156,9 @@ class SWave:
 
         # Optional: Stores the chna chunk ('chna' chunk)
         self.chna: Optional[WaveChnaChunk] = None
+
+        # Optional: Stores the strc chunk ('strc' chunk)
+        self.strc: Optional[WaveStrcChunk] = None
 
         # Decode and set any existing chunks
         self.decode_chunks()
