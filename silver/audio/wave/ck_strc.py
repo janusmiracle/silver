@@ -8,6 +8,8 @@ import struct
 from dataclasses import dataclass
 from typing import List
 
+from silver.utils import get_sign
+
 # The implementation might not be accurate due to lack of documentation.
 # Any insights or corrections are welcome.
 # No testing will be created for this chunk.
@@ -54,20 +56,11 @@ class WaveStrc:
         # -- Strc chunk info fields
         self.strc = self.get_strc()
 
-    def _get_ordersign(self) -> str:
-        """Returns "<" for little-endian and ">" for big-endian."""
-        if self.byteorder == "little":
-            return "<"
-        elif self.byteorder == "big":
-            return ">"
-        else:
-            raise ValueError(f"Invalid byteorder input: {self.byteorder}")
-
     def get_strc(self) -> WaveStrcChunk:
         """
         Decodes the provided ['strc' / STRC] chunk data.
         """
-        sign = self._get_ordersign()
+        sign = get_sign(self.byteorder)
         header_pattern = f"{sign}IIIIIII"
         (
             unknown1,

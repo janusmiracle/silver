@@ -5,6 +5,8 @@ import struct
 from dataclasses import dataclass
 from typing import List
 
+from silver.utils import get_sign
+
 # Storing here until official chunk test files are created.
 # Should output: WaveChnaChunk(
 #   identifier='chna',
@@ -58,20 +60,11 @@ class WaveChna:
         # -- Chna chunk info field
         self.chna = self.get_chna()
 
-    def _get_ordersign(self) -> str:
-        """Returns "<" for little-endian and ">" for big-endian."""
-        if self.byteorder == "little":
-            return "<"
-        elif self.byteorder == "big":
-            return ">"
-        else:
-            raise ValueError(f"Invalid byteorder input: {self.byteorder}")
-
     def get_chna(self) -> WaveChnaChunk:
         """
         Decodes the provided ['chna' / CHNA] chunk data.
         """
-        sign = self._get_ordersign()
+        sign = get_sign(self.byteorder)
         default_pattern = f"{sign}HH"
         (track_count, uid_count) = struct.unpack(default_pattern, self.data[:4])
 

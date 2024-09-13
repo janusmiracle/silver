@@ -5,7 +5,9 @@ import struct
 from dataclasses import dataclass
 from typing import List, Optional
 
-from errors import PerverseError
+from .errors import PerverseError
+
+from silver.utils import get_sign
 
 # manufacturer = 0 == no specific manufacturer
 # loop_count = 0 == INFINITE
@@ -58,20 +60,11 @@ class WaveSample:
         # -- Sample chunk info field
         self.sample = self.get_sample()
 
-    def _get_ordersign(self) -> str:
-        """Returns "<" for little-endian and ">" for big-endian."""
-        if self.byteorder == "little":
-            return "<"
-        elif self.byteorder == "big":
-            return ">"
-        else:
-            raise ValueError(f"Invalid byteorder input: {self.byteorder}")
-
     def get_sample(self) -> WaveSampleChunk:
         """
         Decodes the provided ['smpl' / SAMPLE] chunk data.
         """
-        sign = self._get_ordersign()
+        sign = get_sign(self.byteorder)
         default_pattern = f"{sign}iiiiiiiii"
 
         (

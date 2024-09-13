@@ -2,6 +2,8 @@
 
 from typing import Generator, Tuple
 
+from silver.utils import get_sign
+
 FALSE_SIZE = "0xffffffff"  # -1 / "0xFFFFFFFF"
 
 

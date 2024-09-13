@@ -3,18 +3,18 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from chunks import Chunky
-from ck_acid import WaveAcid, WaveAcidChunk
-from ck_cart import WaveCart, WaveCartChunk
-from ck_chna import WaveChna, WaveChnaChunk
-from ck_data import WaveData, WaveDataChunk
-from ck_fact import WaveFact, WaveFactChunk
-from ck_fmt import WaveFormat, WaveFormatChunk
-from ck_info import WaveInfo, WaveInfoChunk
-from ck_inst import WaveInstrument, WaveInstrumentChunk
-from ck_levl import WavePeakEnvelope, WavePeakEnvelopeChunk
-from ck_smpl import WaveSample, WaveSampleChunk
-from ck_strc import WaveStrc, WaveStrcChunk
+from .chunks import Chunky
+from .ck_acid import WaveAcid, WaveAcidChunk
+from .ck_cart import WaveCart, WaveCartChunk
+from .ck_chna import WaveChna, WaveChnaChunk
+from .ck_data import WaveData, WaveDataChunk
+from .ck_fact import WaveFact, WaveFactChunk
+from .ck_fmt import WaveFormat, WaveFormatChunk
+from .ck_info import WaveInfo, WaveInfoChunk
+from .ck_inst import WaveInstrument, WaveInstrumentChunk
+from .ck_levl import WavePeakEnvelope, WavePeakEnvelopeChunk
+from .ck_smpl import WaveSample, WaveSampleChunk
+from .ck_strc import WaveStrc, WaveStrcChunk
 
 
 @dataclass

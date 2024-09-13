@@ -4,6 +4,8 @@ import struct
 
 from dataclasses import dataclass
 
+from silver.utils import get_sign
+
 # NOTE: This implementation is based on `wav_read_acid_chunk` from libsndfile's wav.c.
 #       The provided explanation MAY be incomplete and MAY not have been confirmed.
 
@@ -51,21 +53,12 @@ class WaveAcid:
         # -- Acid chunk info field
         self.acid = self.get_acid()
 
-    def _get_ordersign(self) -> str:
-        """Returns "<" for little-endian and ">" for big-endian."""
-        if self.byteorder == "little":
-            return "<"
-        elif self.byteorder == "big":
-            return ">"
-        else:
-            raise ValueError(f"Invalid byteorder input: {self.byteorder}")
-
     def get_acid(self) -> WaveAcidChunk:
         """
         Decodes the provided ['acid' / ACID] chunk data.
         """
 
-        sign = self._get_ordersign()
+        sign = get_sign(self.byteorder)
         default_pattern = f"{sign}IHHIIHHI"
         (
             properties,

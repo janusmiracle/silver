@@ -6,9 +6,10 @@ import uuid
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from _format_codes import CHANNEL_MASK_BMAP, FORMAT_ENCODINGS
-from errors import PerverseError
+from ._format_codes import CHANNEL_MASK_BMAP, FORMAT_ENCODINGS
+from .errors import PerverseError
 
+from silver.utils import get_sign
 
 EXTENSIBLE = 65534
 
@@ -73,18 +74,9 @@ class WaveFormat:
         # -- Sanity
         self.sanity = None
 
-    def _get_ordersign(self) -> str:
-        """Returns "<" for little-endian and ">" for big-endian."""
-        if self.byteorder == "little":
-            return "<"
-        elif self.byteorder == "big":
-            return ">"
-        else:
-            raise ValueError(f"Invalid byteorder input: {self.byteorder}")
-
     def get_format(self) -> WaveFormatChunk:
         """Decodes the provided ['fmt ' / FORMAT] chunk data."""
-        sign = self._get_ordersign()
+        sign = get_sign(self.byteorder)
         default_pattern = f"{sign}HHIIHH"  # H = uint16_t, I = uint32_t
         self.sanity = []
         (

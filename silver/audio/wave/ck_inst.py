@@ -4,6 +4,8 @@ import struct
 
 from dataclasses import dataclass
 
+from silver.utils import get_sign
+
 
 @dataclass
 class WaveInstrumentChunk:
@@ -37,19 +39,10 @@ class WaveInstrument:
         # -- Instrument chunk info field
         self.instrument = self.get_instrument()
 
-    def _get_ordersign(self) -> str:
-        """Returns "<" for little-endian and ">" for big-endian."""
-        if self.byteorder == "little":
-            return "<"
-        elif self.byteorder == "big":
-            return ">"
-        else:
-            raise ValueError(f"Invalid byteorder input: {self.byteorder}")
-
     def get_instrument(self) -> WaveInstrumentChunk:
         """Decodes the provided ['inst' / INSTRUMENT] chunk data."""
 
-        sign = self._get_ordersign()
+        sign = get_sign(self.byteorder)
         default_pattern = f"{sign}BBBBBBB"
         (
             unshifted_note,
