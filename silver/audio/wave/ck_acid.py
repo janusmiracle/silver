@@ -59,7 +59,7 @@ class WaveAcid:
         """
 
         sign = get_sign(self.byteorder)
-        default_pattern = f"{sign}IHHIIHHI"
+        default_pattern = f"{sign}IHHIIHHf"
         (
             properties,
             root_note,
