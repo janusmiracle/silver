@@ -59,7 +59,7 @@ class WaveAcid:
         """
 
         sign = get_sign(self.byteorder)
-        default_pattern = f"{sign}IHHIIHHf"
+        default_pattern = f"{sign}IHHfIHHf"
         (
             properties,
             root_note,
@@ -69,7 +69,7 @@ class WaveAcid:
             meter_denominator,
             meter_numerator,
             tempo,
-        ) = struct.unpack(default_pattern, self.data[:32])
+        ) = struct.unpack(default_pattern, self.data[:24])
 
         is_oneshot = (properties & 0x01) != 0
         is_root_note = (properties & 0x02) != 0
