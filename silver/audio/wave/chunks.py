@@ -1,8 +1,8 @@
 # File: audio/wave/chunks.py
 
-from typing import Generator, Tuple
+import mmap
 
-from silver.utils import get_sign
+from typing import Generator, Tuple
 
 FALSE_SIZE = "0xffffffff"  # -1 / "0xFFFFFFFF"
 
@@ -52,6 +52,7 @@ class Chunky:
         formtype = stream.read(4).decode(self.ENCODING)
         self.formtype = formtype
 
+        # print(master, master_size, formtype)
         if master_size == FALSE_SIZE:
             # Size is set to -1, true size is stored in ds64
             yield from self._rf64(stream, byteorder)
@@ -73,7 +74,6 @@ class Chunky:
                 break
 
             chunk_identifier = identifier_bytes.decode(self.ENCODING)
-
             if chunk_identifier == "afsp":
                 # Records from the `afsp` chunk are transferred to DISP/LIST[INFO] chunks
                 # Thus, the `afsp` is ignored as it contains no size field
@@ -105,8 +105,78 @@ class Chunky:
         Yields chunks from an RF64 stream where the RIFF size is set to -1
         and must be retrieved from the `ds64` chunk.
         """
-        # TODO: implement this after basic wave support is added
-        pass
+        ds64_identifier = stream.read(4).decode(self.ENCODING)
+        if ds64_identifier != "ds64":
+            raise ValueError(f"Expected ds64 chunk but found {ds64_identifier}")
+
+        ds64_size_bytes = stream.read(4)
+        ds64_size = int.from_bytes(ds64_size_bytes, byteorder)
+
+        riff_low_size_bytes = stream.read(4)
+        riff_low_size = int.from_bytes(riff_low_size_bytes, byteorder)
+
+        riff_high_size_bytes = stream.read(4)
+        riff_high_size = int.from_bytes(riff_high_size_bytes, byteorder)
+
+        data_low_size_bytes = stream.read(4)
+        data_low_size = int.from_bytes(data_low_size_bytes, byteorder)
+
+        data_high_size_bytes = stream.read(4)
+        data_high_size = int.from_bytes(data_high_size_bytes, byteorder)
+
+        sample_low_count_bytes = stream.read(4)
+        sample_low_count = int.from_bytes(sample_low_count_bytes, byteorder)
+
+        sample_high_count_bytes = stream.read(4)
+        sample_high_count = int.from_bytes(sample_high_count_bytes, byteorder)
+
+        table_entry_count_bytes = stream.read(4)
+        table_entry_count = int.from_bytes(table_entry_count_bytes, byteorder)
+
+        # Skip to end of ds64 chunk
+        current_location = stream.tell()
+        stream.seek(current_location + table_entry_count * 12)
+
+        while True:
+            identifier_bytes = stream.read(4)
+            if len(identifier_bytes) < 4:
+                break
+
+            chunk_identifier = identifier_bytes.decode(self.ENCODING)
+
+            if chunk_identifier == "afsp":
+                self._skip_afsp(stream)
+                continue
+
+            # TODO: Should account for table_entry_count > 0 in the future
+            match chunk_identifier:
+                # For cases other than default, the true sizes
+                # of the chunks are stored in the 'ds64' chunk
+                case "data":
+                    # Skipping the 'data' chunk takes a long time
+                    # TODO: find a way to improve this
+                    stream.read(4)
+                    chunk_size = data_low_size + (data_high_size << 32)
+                case "fact":
+                    stream.read(4)
+                    chunk_size = sample_low_count + (sample_high_count << 32)
+                case _:
+                    size_bytes = stream.read(4)
+                    if len(size_bytes) < 4:
+                        break
+
+                    chunk_size = int.from_bytes(size_bytes, byteorder)
+
+            if chunk_size % 2 != 0 and chunk_identifier != "bext":
+                chunk_size += 1
+
+            chunk_data = stream.read(chunk_size)
+
+            if chunk_identifier != "\x00\x00\x00\x00":
+                yield (chunk_identifier, chunk_size, chunk_data)
+
+            # Skip to the start of the next chunk
+            stream.seek(chunk_size - len(chunk_data), 1)
 
     def _skip_afsp(self, stream):
         """
