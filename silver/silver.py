@@ -3,10 +3,9 @@
 import io
 
 from pathlib import Path
-from typing import BinaryIO
 
 from .config import configure_logging, DEFAULT_CONFIG, InputSource
-from .format import SilverFormat
+from .format import SFormat
 from .protocols import Protocol
 from .types import Source
 
@@ -24,12 +23,12 @@ class Silver:
         """
         TODO
         """
-        if not isinstance(source, (str, Path, BinaryIO, bytes)):
+        if not isinstance(source, (str, Path, io.BufferedReader, bytes)):
             raise TypeError(
                 f"Source must be one of the following types: str, Path, BinaryIO, bytes. Got {type(source)} instead."
             )
 
-        # # --- Parameter fields
+        # --- Parameter fields
         self.source = source
 
         if mode:
@@ -54,7 +53,7 @@ class Silver:
         self._initialize_stream()
 
         # --- Detected format field
-        self.format = SilverFormat(self.stream).format
+        self.format = None
 
         # --- Information fields
         # self.wave: Optional[SilverWave] = None
@@ -74,7 +73,7 @@ class Silver:
         elif isinstance(self.source, Path):
             self.stream = self.source.open("rb")
             self.stype = InputSource.FILE.value
-        elif isinstance(self.source, BinaryIO):
+        elif isinstance(self.source, (io.BufferedReader)):
             self.stream = self.source
             self.stype = InputSource.STREAM.value
         elif isinstance(self.source, bytes):
@@ -83,7 +82,7 @@ class Silver:
         else:
             raise TypeError("Source must be a file path, file-like object, or URL.")
 
-        self.format = SilverFormat(self.stream).format
+        self.format = SFormat(self.stream).format
         self.logger.debug(f"Format detected: {self.format}")
 
         self.stype = self.stype

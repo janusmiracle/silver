@@ -10,7 +10,7 @@ class UnknownFormatError(Exception):
     pass
 
 
-class SilverFormat:
+class SFormat:
     """
     Detects the format of a given binary stream.
 
