@@ -1,15 +1,18 @@
 # File: audio/wave/chunks.py
 
-import mmap
-
 from typing import Generator, Tuple
 
 FALSE_SIZE = "0xffffffff"  # -1 / "0xFFFFFFFF"
+NULL_IDENTIFIER = "\x00\x00\x00\x00"
+
+
+# TODO: Figure out how Sony Wave64 works and how to implement it
 
 
 class Chunky:
     """
-    This class handles the retrieval of chunks from a RIFF-based file stream.
+    Retrieve all chunks from a RIFF-based file stream.
+    This includes RIFF, RF64, BWF, and Sony Wave64 formats.
     """
 
     ENCODING = "latin-1"
@@ -172,7 +175,7 @@ class Chunky:
 
             chunk_data = stream.read(chunk_size)
 
-            if chunk_identifier != "\x00\x00\x00\x00":
+            if chunk_identifier != NULL_IDENTIFIER:
                 yield (chunk_identifier, chunk_size, chunk_data)
 
             # Skip to the start of the next chunk
