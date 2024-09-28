@@ -1,9 +1,17 @@
+# cache
 .ruff_cache/
-silver/__pycache__
-silver/audio/__pycache__
-silver/audio/wave/__pycache__
+**/__pycache__/
+
+# test files
 silver/audio/wave/test.py
-tests/__pycache__
-tests/audio/wave/__pycache__
+rr.py 
+t.py
+
+# lock file
 poetry.lock
-rr.py
+
+# old src folder 
+silver/
+
+# remove this once bext support is complete
+src/audio/wave/bext.py
