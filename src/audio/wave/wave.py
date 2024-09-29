@@ -320,6 +320,33 @@ class WaveStrcChunk:
     slice_blocks: List[SliceBlock]
 
 
+CODING_HISTORY_LO = 602
+
+
+@dataclass
+class WaveBroadcastChunk:
+    identifier: str
+    size: int
+
+    # fmt: off
+    description: str                    # ASCII 256
+    originator: str                     # ASCII 32
+    originator_reference: str           # ASCII 32
+    origin_date: str                    # ASCII 10 --YYYY:MM:DD
+    origin_time: str                    # ASCII 8 --HH:MM:SS
+    time_reference_low: int
+    time_reference_high: int
+    version: int                        # 2
+    smpte_umid: str                     # 63
+    loudness_value: int                 # 2
+    loudness_range: int                 # 2
+    max_true_peak_level: int            # 2
+    max_momentary_loudness: int         # 2
+    max_short_term_loudness: int        # 2
+    coding_history: str
+    # fmt: on
+
+
 class SWave:
     """
     WAVE stuff
@@ -362,6 +389,7 @@ class SWave:
             self.formtype = chunky.formtype
             self.ds64 = chunky.ds64
             self.chunks.append((identifier, size, data))
+
             if identifier == LIST_IDENTIFIER:
                 # Determine the list-type and overwrite
                 identifier = data[:4].decode(DEFAULT_ENCODING).strip()
@@ -386,6 +414,7 @@ class SWave:
         """Provides all processed and decoded data in a readable format."""
         ATTR = [
             "fmt",
+            "ds64",
             "data",
             "fact",
             "info",
@@ -417,6 +446,8 @@ class SWave:
                         value.slice_blocks = [
                             vars(block) for block in value.slice_blocks
                         ]
+                    if value is None:
+                        base[attr] = value
                     try:
                         base[attr] = value.__dict__
                     except:
@@ -489,12 +520,12 @@ class SWave:
             extension_size = struct.unpack(f"{sign}H", data[16:18])[0]
 
         else:
-            if self.size != 16:
+            if size != 16:
                 location = f"{FORMAT_CHUNK_LOCATION} -- AUDIO FORMAT / SIZE"
                 error_message = (
                     f"AUDIO FORMAT (PCM / 1 / 0x0001) MUST BE SIZE 16 NOT {size}."
                 )
-                self.sanity.append(PerverseError(location, error_message))
+                sanity.append(PerverseError(location, error_message))
 
             mode = WAVE_FORMAT_PCM
 
@@ -919,4 +950,61 @@ class SWave:
             unknown5=unknown5,
             unknown6=unknown6,
             slice_blocks=slice_blocks,
+        )
+
+    def _bext(self, identifier: str, size: int, data: bytes) -> WaveBroadcastChunk:
+        """Decoder for the ['bext' / BROADCAST] chunk."""
+        stream = io.BytesIO(data)
+        description, originator, originator_reference, origin_date, origin_time = (
+            struct.unpack("256s32s32s10s8s", stream.read(338))
+        )
+        description = description.decode("ascii").rstrip("\x00").strip("\u0000")
+        originator = originator.decode("ascii").rstrip("\x00").strip("\u0000")
+        originator_reference = (
+            originator_reference.decode("ascii").rstrip("\x00").strip("\u0000")
+        )
+        origin_date = origin_date.decode("ascii").rstrip("\x00").strip("\u0000")
+        origin_time = origin_time.decode("ascii").rstrip("\x00").strip("\u0000")
+
+        time_reference_low, time_reference_high, version = struct.unpack(
+            "IIH", stream.read(10)
+        )
+        smpte_umid = (
+            struct.unpack("63s", stream.read(63))[0]
+            .decode("ascii")
+            .rstrip("\x00")
+            .strip("\u0000")
+        )
+
+        loudness_values = struct.unpack("5H", stream.read(10))
+        (
+            loudness_value,
+            loudness_range,
+            max_true_peak_level,
+            max_momentary_loudness,
+            max_short_term_loudness,
+        ) = loudness_values
+
+        coding_history = (
+            data[CODING_HISTORY_LO:].decode("ascii").rstrip("\x00").strip("\u0000")
+        )
+
+        return WaveBroadcastChunk(
+            identifier=identifier,
+            size=size,
+            description=description,
+            originator=originator,
+            originator_reference=originator_reference,
+            origin_date=origin_date,
+            origin_time=origin_time,
+            time_reference_low=time_reference_low,
+            time_reference_high=time_reference_high,
+            version=version,
+            smpte_umid=smpte_umid,
+            loudness_value=loudness_value,
+            loudness_range=loudness_range,
+            max_true_peak_level=max_true_peak_level,
+            max_momentary_loudness=max_momentary_loudness,
+            max_short_term_loudness=max_short_term_loudness,
+            coding_history=coding_history,
         )

@@ -6,12 +6,8 @@
 silver/audio/wave/test.py
 rr.py 
 t.py
+24bit-bext-PROTOOLS-EXTENSIBLE.wav
 
 # lock file
 poetry.lock
 
-# old src folder 
-silver/
-
-# remove this once bext support is complete
-src/audio/wave/bext.py
