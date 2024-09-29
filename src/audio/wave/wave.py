@@ -382,6 +382,8 @@ class SWave:
         Reads, processes,and sets all chunks from the stream.
         """
         chunky = Chunky()
+        chunk_counts = {}
+
         for identifier, size, data in chunky.get_chunks(self.stream):
             # Set some values for the future
             self.byteorder = chunky.byteorder
@@ -399,20 +401,35 @@ class SWave:
                 self.chunks.append((identifier, size, data))
 
             false_identifier = identifier.lower().strip()
+
+            if false_identifier not in chunk_counts:
+                chunk_counts[false_identifier] = 1
+            else:
+                chunk_counts[false_identifier] += 1
+
+            # Account for multiple chunks (e.g. more than 1 'fmt ')
+            attr_name = (
+                false_identifier
+                if chunk_counts[false_identifier] == 1
+                else f"{false_identifier}{chunk_counts[false_identifier]}"
+            )
+
             if hasattr(self, f"_{false_identifier}"):
                 decoder = getattr(self, f"_{false_identifier}")
                 if callable(decoder):
-                    setattr(self, false_identifier, decoder(identifier, size, data))
+                    setattr(self, attr_name, decoder(identifier, size, data))
             else:
                 gc = GenericChunk(identifier, size, data)
-                setattr(self, false_identifier, gc)
+                setattr(self, attr_name, gc)
 
             if self.fmt is not None and self.data is not None:
                 self.data.frame_count = int(self.data.byte_count / self.fmt.block_align)
 
     def as_readable(self):
         """Provides all processed and decoded data in a readable format."""
-        ATTR = [
+        base = {}
+        chunk_counts = {}
+        CHUNK_ATTR = [
             "fmt",
             "ds64",
             "data",
@@ -427,31 +444,45 @@ class SWave:
             "strc",
             "bext",
         ]
-        base = {}
 
-        # This is so odd but it seems to work so
+        # Account for multiple chunks (e.g. more than 1 'fmt ')
         for attr, value in self.__dict__.items():
-            if attr in ATTR and value is not None:
-                if attr == DATA_IDENTIFIER:
-                    base[attr] = {
-                        "byte_count": value.byte_count,
-                        "frame_count": value.frame_count,
-                    }
+            if value is not None:
+                if attr[:3] == "fmt":
+                    chunk_type = "fmt"
                 else:
-                    # Seems like this needs to be done for any sub-dataclasses
-                    if hasattr(value, "sanity"):
-                        value.sanity = str(value.sanity)
+                    chunk_type = attr[:4]
 
-                    if hasattr(value, "slice_blocks"):
-                        value.slice_blocks = [
-                            vars(block) for block in value.slice_blocks
-                        ]
-                    if value is None:
-                        base[attr] = value
-                    try:
-                        base[attr] = value.__dict__
-                    except:
-                        base[attr] = value
+                if chunk_type in CHUNK_ATTR:
+                    if chunk_type not in chunk_counts:
+                        chunk_counts[chunk_type] = 1
+                    else:
+                        chunk_counts[chunk_type] += 1
+
+                    attr_name = (
+                        chunk_type
+                        if chunk_counts[chunk_type] == 1
+                        else f"{chunk_type}{chunk_counts[chunk_type]}"
+                    )
+
+                    if chunk_type == "data":
+                        base[attr_name] = {
+                            "byte_count": value.byte_count,
+                            "frame_count": value.frame_count,
+                        }
+                    else:
+                        if hasattr(value, "sanity"):
+                            value.sanity = str(value.sanity)
+
+                        if hasattr(value, "slice_blocks"):
+                            value.slice_blocks = [
+                                vars(block) for block in value.slice_blocks
+                            ]
+
+                        try:
+                            base[attr_name] = value.__dict__
+                        except AttributeError:
+                            base[attr_name] = value
 
         return json.dumps(base, indent=2)
 
