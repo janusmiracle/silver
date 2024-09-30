@@ -5,8 +5,9 @@ import json
 import struct
 import uuid
 
+from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Dict, Generator, List, Optional, Tuple
+from typing import Dict, Generator, List, Optional, Tuple, Union
 
 from ._storage import CODECS, GENERIC_CHANNEL_MASK_MAP
 from .chunky import Chunky
@@ -419,72 +420,100 @@ class SWave:
                 if callable(decoder):
                     setattr(self, attr_name, decoder(identifier, size, data))
             else:
-                gc = GenericChunk(identifier, size, data)
+                gc = GenericChunk(identifier, size, str(data))
                 setattr(self, attr_name, gc)
 
             if self.fmt is not None and self.data is not None:
                 self.data.frame_count = int(self.data.byte_count / self.fmt.block_align)
 
-    def as_readable(self):
+    # fmt: off
+    def as_readable(self, truncate: bool = False, max_length: int = 100, indent: int = 2):
         """Provides all processed and decoded data in a readable format."""
         base = {}
         chunk_counts = {}
+
         CHUNK_ATTR = [
-            "fmt",
-            "ds64",
-            "data",
-            "fact",
-            "info",
-            "inst",
-            "levl",
-            "smpl",
-            "acid",
-            "cart",
-            "chna",
-            "strc",
-            "bext",
+            "acid", "cart", "chna", "data", "ds64", "fact", 
+            "fmt", "info", "inst", "levl", "smpl", "strc", "bext",
         ]
 
-        # Account for multiple chunks (e.g. more than 1 'fmt ')
+        IGNORE_ATTR = [
+            "__annotations__", "__class__", "__dict__", "__doc__", 
+            "__init__", "__module__", "__weakref__", "chunks", "stream",
+        ]
+
+        # Sorted based on importance rather than alphabetically
+        NOT_CHUNK = [
+            "master", "formtype", "byteorder", "bitrate",
+            "bitrate_long", "chunk_ids",
+        ]
+
         for attr, value in self.__dict__.items():
-            if value is not None:
-                if attr[:3] == "fmt":
-                    chunk_type = "fmt"
+            if value is None or attr in IGNORE_ATTR:
+                continue
+
+            chunk_type = (
+                attr if attr in NOT_CHUNK else (attr[:4] if attr[:3] != "fmt" else "fmt")
+            )
+
+            if chunk_type not in CHUNK_ATTR and chunk_type in IGNORE_ATTR:
+                continue
+
+            chunk_counts[chunk_type] = chunk_counts.get(chunk_type, 0) + 1
+            attr_name = (
+                f"{chunk_type}{chunk_counts[chunk_type]}"
+                if chunk_counts[chunk_type] > 1
+                else chunk_type
+            )
+
+            if chunk_type == "data":
+                base[attr_name] = {
+                    "byte_count": value.byte_count,
+                    "frame_count": value.frame_count,
+                }
+            else:
+                if hasattr(value, "__dataclass_fields__"):
+                    for field_name, field_value in value.__dict__.items():
+                        if isinstance(field_value, bytes):
+                            field_value = (
+                                field_value.decode("utf-8", errors="ignore")
+                                if not truncate
+                                else (
+                                    "..." if len(field_value) > max_length else field_value
+                                )
+                            )
+                        elif (
+                            isinstance(field_value, str)
+                            and truncate
+                            and len(field_value) > max_length
+                        ):
+                            field_value = field_value[:max_length] + "..."
+
+                        value.__dict__[field_name] = field_value
+
+                if hasattr(value, "sanity"):
+                    value.sanity = str(value.sanity)
+
+                if hasattr(value, "slice_blocks"):
+                    value.slice_blocks = [vars(block) for block in value.slice_blocks]
+
+                if isinstance(value, Union[list, int, str]):
+                    base[attr_name] = value
                 else:
-                    chunk_type = attr[:4]
+                    base[attr_name] = value.__dict__
 
-                if chunk_type in CHUNK_ATTR:
-                    if chunk_type not in chunk_counts:
-                        chunk_counts[chunk_type] = 1
-                    else:
-                        chunk_counts[chunk_type] += 1
+        # Reorder so non-chunk keys are first
+        ordered_base = OrderedDict()
+        for key in NOT_CHUNK:
+            if key in base:
+                ordered_base[key] = base[key]
 
-                    attr_name = (
-                        chunk_type
-                        if chunk_counts[chunk_type] == 1
-                        else f"{chunk_type}{chunk_counts[chunk_type]}"
-                    )
+        for key in base:
+            if key not in ordered_base:
+                ordered_base[key] = base[key]
 
-                    if chunk_type == "data":
-                        base[attr_name] = {
-                            "byte_count": value.byte_count,
-                            "frame_count": value.frame_count,
-                        }
-                    else:
-                        if hasattr(value, "sanity"):
-                            value.sanity = str(value.sanity)
-
-                        if hasattr(value, "slice_blocks"):
-                            value.slice_blocks = [
-                                vars(block) for block in value.slice_blocks
-                            ]
-
-                        try:
-                            base[attr_name] = value.__dict__
-                        except AttributeError:
-                            base[attr_name] = value
-
-        return json.dumps(base, indent=2)
+        # fmt: on
+        return json.dumps(ordered_base, indent=indent)
 
     # -: Onwards, chunk decoders
     def _fmt(self, identifier: str, size: int, data: bytes) -> WaveFormatChunk:
