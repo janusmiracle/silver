@@ -4,6 +4,7 @@ import io
 import json
 import struct
 import uuid
+import xml.etree.ElementTree as ET
 
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -13,13 +14,13 @@ from ._storage import CODECS, GENERIC_CHANNEL_MASK_MAP
 from .chunky import Chunky
 from .errors import PerverseError
 
-from src.utils import bo_symbol, Stream
+from src.utils import bo_symbol, sanitize_fallback, Stream
 
 
 DEFAULT_ENCODING = "latin-1"
 
 
-# Chunk identifiers
+# Chunk identifiers -- Most are not used
 FMT_IDENTIFIER = "fmt "
 DATA_IDENTIFIER = "data"
 FACT_IDENTIFIER = "fact"
@@ -33,6 +34,10 @@ CART_IDENTIFIER = "cart"
 CHNA_IDENTIFIER = "chna"
 STRC_IDENTIFIER = "strc"
 BEXT_IDENTIFIER = "bext"
+DISP_IDENTIFIER = "DISP"
+ADTL_IDENTIFIER = "adtl"
+CUE_IDENTIFIER = "cue "
+PMX_IDENTIFIER = "_PMX"
 
 
 @dataclass
@@ -348,6 +353,65 @@ class WaveBroadcastChunk:
     # fmt: on
 
 
+@dataclass
+class WaveDisplayChunk:
+    identifier: str
+    size: int
+    cftype: int
+    data: str
+
+
+@dataclass
+class CuePoint:
+    point_id: str
+    position: int
+    chunk_id: str
+    chunk_start: int
+    block_start: int
+    sample_start: int
+
+
+@dataclass
+class WaveCueChunk:
+    identifier: str
+    size: int
+    point_count: int
+    cue_points: List[CuePoint]
+
+
+@dataclass
+class LabelNote:
+    cue_point_id: str
+    data: str
+
+
+@dataclass
+class LabeledText:
+    cue_point_id: str
+    sample_length: int
+    purpose_id: str
+    country: str
+    language: str
+    dialect: str
+    code_page: str
+    data: str
+
+
+@dataclass
+class WaveADTLChunk:
+    identifier: str
+    size: int
+    sub_chunk_id: str
+    ascii_data: Union[LabelNote, LabeledText]
+
+
+@dataclass
+class WaveXMLChunk:
+    identifier: str
+    size: int
+    xml: str
+
+
 class SWave:
     """
     WAVE stuff
@@ -371,6 +435,12 @@ class SWave:
         self.chna: Optional[WaveChnaChunk] = None
         self.strc: Optional[WaveStrcChunk] = None
         self.bext: Optional[WaveBroadcastChunk] = None
+        self.disp: Optional[WaveDisplayChunk] = None
+        self.cue: Optional[WaveCueChunk] = None
+        self.adtl: Optional[WaveADTLChunk] = None
+        self.pmx: Optional[WaveXMLChunk] = None
+        self.axml: Optional[WaveXMLChunk] = None
+        self.ixml: Optional[WaveXMLChunk] = None
 
         # -: Initialize attributes
         self.all_chunks()
@@ -393,7 +463,7 @@ class SWave:
             self.ds64 = chunky.ds64
             self.chunks.append((identifier, size, data))
 
-            if identifier == LIST_IDENTIFIER:
+            if identifier == LIST_IDENTIFIER or identifier == ADTL_IDENTIFIER:
                 # Determine the list-type and overwrite
                 identifier = data[:4].decode(DEFAULT_ENCODING).strip()
                 size -= 12
@@ -402,6 +472,11 @@ class SWave:
                 self.chunks.append((identifier, size, data))
 
             false_identifier = identifier.lower().strip()
+
+            if not false_identifier == "_pmx":
+                _set = f"_{false_identifier}"
+            else:
+                _set = false_identifier
 
             if false_identifier not in chunk_counts:
                 chunk_counts[false_identifier] = 1
@@ -415,9 +490,11 @@ class SWave:
                 else f"{false_identifier}{chunk_counts[false_identifier]}"
             )
 
-            if hasattr(self, f"_{false_identifier}"):
-                decoder = getattr(self, f"_{false_identifier}")
+            if hasattr(self, _set):
+                decoder = getattr(self, _set)
                 if callable(decoder):
+                    if _set == "_pmx":
+                        attr_name = "pmx"
                     setattr(self, attr_name, decoder(identifier, size, data))
             else:
                 gc = GenericChunk(identifier, size, str(data))
@@ -433,8 +510,8 @@ class SWave:
         chunk_counts = {}
 
         CHUNK_ATTR = [
-            "acid", "cart", "chna", "data", "ds64", "fact", 
-            "fmt", "info", "inst", "levl", "smpl", "strc", "bext",
+            "_pmx", "acid", "adtl", "axml", "bext", "cart", "chna", "cue", "data", "disp", "ds64", "fact", 
+            "fmt", "info", "inst", "ixml", "levl", "smpl", "strc",
         ]
 
         IGNORE_ATTR = [
@@ -497,7 +574,13 @@ class SWave:
                 if hasattr(value, "slice_blocks"):
                     value.slice_blocks = [vars(block) for block in value.slice_blocks]
 
-                if isinstance(value, Union[list, int, str]):
+                if hasattr(value, "cue_points"):
+                    value.cue_points = [vars(point) for point in value.cue_points]
+
+                if hasattr(value, "ascii_data"):
+                    value.ascii_data = value.ascii_data.__dict__
+
+                if isinstance(value, Union[Dict, list, int, str]):
                     base[attr_name] = value
                 else:
                     base[attr_name] = value.__dict__
@@ -646,7 +729,7 @@ class SWave:
                 if len(id_bytes) < 4:
                     break
 
-                tag_identifier = id_bytes.decode("ascii")
+                tag_identifier = sanitize_fallback(id_bytes, "ascii")
                 size_bytes = stream.read(4)
                 if len(size_bytes) < 4:
                     break
@@ -657,10 +740,9 @@ class SWave:
                     tag_size += 1
 
                 data_bytes = stream.read(tag_size)
-                try:
-                    tag_data = data_bytes.decode("ascii").rstrip("\x00")
-                except Exception:
-                    tag_data = data_bytes.decode("latin-1").rstrip("\x00")
+                tag_data = sanitize_fallback(data_bytes, "ascii")
+                if not tag_data:
+                    tag_data = sanitize_fallback(data_bytes, "latin-1")
 
                 yield (tag_identifier, tag_size, tag_data)
 
@@ -756,8 +838,8 @@ class SWave:
         ) = struct.unpack(default_pattern, data[:32])
 
         # The timestamp and reserved spaces are always 28 bytes and 60 bytes respectively
-        timestamp = data[32:60].decode("unicode-escape").rstrip("\x00")
-        reserved = data[60:120].decode("latin-1").rstrip("\x00")
+        timestamp = sanitize_fallback(data[32:60], "unicode-escape")
+        reserved = sanitize_fallback(data[60:120], "latin-1")
 
         # Everything after reserved is the peak envelope data
         peak_envelope_data = data[120:]
@@ -892,7 +974,7 @@ class SWave:
 
     def _cart(self, identifier: str, size: int, data: bytes) -> WaveCartChunk:
         """Decoder for the ['cart' / CART] chunk."""
-        cleaned = data.decode("ascii").strip("\x00").replace("\x00", "")
+        cleaned = sanitize_fallback(data, "ascii")
         return WaveCartChunk(identifier=identifier, size=size, data=cleaned)
 
     def _chna(self, identifier: str, size: int, data: bytes) -> WaveChnaChunk:
@@ -919,9 +1001,9 @@ class SWave:
                 track_pattern, data[offset : offset + 40]
             )
 
-            uid = uid.decode("ascii").rstrip("\x00")
-            track_reference = track_reference.decode("ascii").rstrip("\x00")
-            pack_reference = pack_reference.decode("ascii").rstrip("\x00")
+            uid = sanitize_fallback(uid, "ascii")
+            track_reference = sanitize_fallback(track_reference, "ascii")
+            pack_reference = sanitize_fallback(pack_reference, "ascii")
             padded = pad == b"\x00"
 
             audio_id = AudioID(
@@ -1015,26 +1097,19 @@ class SWave:
     def _bext(self, identifier: str, size: int, data: bytes) -> WaveBroadcastChunk:
         """Decoder for the ['bext' / BROADCAST] chunk."""
         stream = io.BytesIO(data)
+
         description, originator, originator_reference, origin_date, origin_time = (
             struct.unpack("256s32s32s10s8s", stream.read(338))
         )
-        description = description.decode("ascii").rstrip("\x00").strip("\u0000")
-        originator = originator.decode("ascii").rstrip("\x00").strip("\u0000")
-        originator_reference = (
-            originator_reference.decode("ascii").rstrip("\x00").strip("\u0000")
-        )
-        origin_date = origin_date.decode("ascii").rstrip("\x00").strip("\u0000")
-        origin_time = origin_time.decode("ascii").rstrip("\x00").strip("\u0000")
 
-        time_reference_low, time_reference_high, version = struct.unpack(
-            "IIH", stream.read(10)
-        )
-        smpte_umid = (
-            struct.unpack("63s", stream.read(63))[0]
-            .decode("ascii")
-            .rstrip("\x00")
-            .strip("\u0000")
-        )
+        description = sanitize_fallback(description, "ascii")
+        originator = sanitize_fallback(originator, "ascii")
+        originator_reference = sanitize_fallback(originator_reference, "ascii")
+        origin_date = sanitize_fallback(origin_date, "ascii")
+        origin_time = sanitize_fallback(origin_time, "ascii")
+
+        time_reference_low, time_reference_high, version = struct.unpack("IIH", stream.read(10)) 
+        smpte_umid = sanitize_fallback(struct.unpack("63s", stream.read(63))[0], "ascii")
 
         loudness_values = struct.unpack("5H", stream.read(10))
         (
@@ -1045,9 +1120,7 @@ class SWave:
             max_short_term_loudness,
         ) = loudness_values
 
-        coding_history = (
-            data[CODING_HISTORY_LO:].decode("ascii").rstrip("\x00").strip("\u0000")
-        )
+        coding_history = sanitize_fallback(data[CODING_HISTORY_LO:], "ascii")
 
         return WaveBroadcastChunk(
             identifier=identifier,
@@ -1067,4 +1140,107 @@ class SWave:
             max_momentary_loudness=max_momentary_loudness,
             max_short_term_loudness=max_short_term_loudness,
             coding_history=coding_history,
+        )
+
+    def _disp(self, identifier: str, size: int, data: bytes) -> WaveDisplayChunk:
+        """Decoder for the ['DISP' / DISPLAY] chunk."""
+        # In INTEL format, so this shouldn't be needed
+        # sign = bo_symbol(self.byteorder)
+        cftype = struct.unpack("I", data[:4])
+        all_that_remains = sanitize_fallback(data[4:], "latin-1")
+
+        return WaveDisplayChunk(
+            identifier=identifier, size=size, cftype=cftype[0], data=all_that_remains
+        )
+
+    def _cue(self, identifier: str, size: int, data: bytes) -> WaveCueChunk:
+        """Decoder for the ['cue ' / CUE] chunk."""
+        sign = bo_symbol(self.byteorder)
+        point_count = struct.unpack(f"{sign}I", data[:4])
+
+        cue_points = []
+        curr = 4
+
+        for cue in range(point_count[0]):
+            (
+                point_id,
+                position,
+                chunk_id,
+                chunk_start,
+                block_start,
+                sample_start
+            ) = struct.unpack(f"{sign}IIIIII", data[curr:curr + 24])
+
+            cue_point = CuePoint(point_id, position, chunk_id, chunk_start, block_start, sample_start)
+
+            cue_points.append(cue_point)
+            curr += 24 
+
+        return WaveCueChunk(
+            identifier=identifier, size=size, point_count=point_count[0], cue_points=cue_points
+        )
+
+    def _adtl(self, identifier: str, size: int, data:bytes) -> WaveADTLChunk:
+        """Decoder for the ['adtl' / ASSOCIATED DATA] chunk."""
+        sign = bo_symbol(self.byteorder)
+        (sub_chunk_id, sub_chunk_size) = struct.unpack(f"{sign}4sI", data[:8])
+
+        sub_chunk_id = sanitize_fallback(sub_chunk_id, "ascii")
+
+        if sub_chunk_id in ['labl', 'note']:
+            (cue_point_id) = struct.unpack(f"{sign}I", data[8:12])
+            sub_data = sanitize_fallback(data[16:], "ascii")
+
+            return WaveADTLChunk(
+                identifier=identifier, size=size, sub_chunk_id=sub_chunk_id, 
+                ascii_data=LabelNote(
+                    cue_point_id=cue_point_id, data=sub_data
+                )
+            )
+
+        elif sub_chunk_id == "ltxt":
+            print(sub_chunk_size)
+            (cue_point_id, sample_length, purpose_id, country, language, dialect, code_page) = struct.unpack(f"{sign}IIIHHHH", data[8:28])
+
+            sub_data = sanitize_fallback(data[32:], "ascii")
+
+            return WaveADTLChunk(
+                identifier=identifier, size=size, sub_chunk_id=sub_chunk_id, 
+                ascii_data=LabeledText(
+                    cue_point_id=cue_point_id, sample_length=sample_length, purpose_id=purpose_id, country=country, language=language, dialect=dialect, code_page=code_page, data=sub_data
+                )
+            )
+
+    def _pmx(self, identifier: str, size: int, data:bytes) -> WaveXMLChunk:
+        """Decoder for the ['_PMX' / XML] chunk."""
+        # Yippeee online XML validator says this outputs valid XML
+        pmx = sanitize_fallback(data, "utf-8")
+        root = ET.fromstring(pmx)
+        xml = ET.tostring(root, encoding='utf-8', xml_declaration=True).decode('utf-8')
+        xml = xml.replace("encoding='utf8'", "encoding='UTF-8'")
+
+        return WaveXMLChunk(
+            identifier=identifier, size=size, xml=xml
+        )
+
+    def _axml(self, identifier: str, size: int, data:bytes) -> WaveXMLChunk:
+        """Decoder for the ['aXML' / XML] chunk."""
+        axml = sanitize_fallback(data, "utf-8")
+        root = ET.fromstring(axml)
+        xml = ET.tostring(root, encoding='utf-8', xml_declaration=True).decode('utf-8')
+        xml = xml.replace("encoding='utf8'", "encoding='UTF-8'")
+
+        return WaveXMLChunk(
+            identifier=identifier, size=size, xml=xml
+        )
+
+    def _ixml(self, identifier: str, size: int, data:bytes) -> WaveXMLChunk:
+        """Decoder for the ['iXML' / XML] chunk."""
+        ixml = sanitize_fallback(data, "utf-8")
+        root = ET.fromstring(ixml)
+        xml = ET.tostring(root, encoding='utf-8', xml_declaration=True).decode('utf-8')
+        xml = xml.replace("encoding='utf8'", "encoding='UTF-8'")
+
+        return WaveXMLChunk(
+            identifier=identifier, size=size, xml=xml
         )

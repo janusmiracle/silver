@@ -18,3 +18,20 @@ def bo_symbol(byteorder: str) -> str:
             return "<"
         case _:
             raise ValueError("Invalid byteorder. Use 'big' or 'little'.")
+
+
+def sanitize_fallback(to_decode: bytes, encoding: str) -> str:
+    """
+    Decodes the provided bytes to the specified encoding, and sanitizes it of null bytes.
+
+    Rather than ignoring any errors, it returns an empty string.
+    """
+    try:
+        return (
+            to_decode.decode(encoding)
+            .rstrip("\x00")
+            .strip("\u0000")
+            .replace("\x00", "")
+        )
+    except (UnicodeDecodeError, AttributeError):
+        return ""
