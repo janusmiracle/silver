@@ -18,6 +18,10 @@ from src.utils import bo_symbol, sanitize_fallback, Stream
 
 
 DEFAULT_ENCODING = "latin-1"
+PVOC_EX = [
+    "8312B9C2-2E6E-11d4-A824-DE5B96C3AB21",
+    "c2b91283-6e2e-d411-a824-de5b96c3ab21",
+]
 
 
 # Chunk identifiers -- Most are not used
@@ -51,10 +55,10 @@ class GenericChunk:
 
 EXTENSIBLE = 65534
 
-WAVE_FORMAT_PCM = "WaveFormatPCM"
-WAVE_FORMAT_EXTENDED = "WaveFormatExtended"
-WAVE_FORMAT_EXTENSIBLE = "WaveFormatExtensible"
-
+WAVE_FORMAT_PCM = "WAVE_FORMAT_PCM"
+WAVE_FORMAT_EXTENDED = "WAVE_FORMAT_EXTENDED"
+WAVE_FORMAT_EXTENSIBLE = "WAVE_FORMAT_EXTENSIBLE"
+WAVE_FORMAT_PVOC_EX = "WAVE_FORMAT_PVOC_EX"
 FORMAT_CHUNK_LOCATION = "['fmt ' / FORMAT]"
 
 
@@ -83,12 +87,29 @@ class WaveFormatChunk:
     speaker_layout: Optional[List[str]] = None
     subformat: Dict[int, str] = None
 
+    # PVOC-EX info
+    version: Optional[int] = None
+    pvoc_size: Optional[int] = None
+    word_format: Optional[int] = None
+    analysis_format: Optional[int] = None
+    source_format: Optional[int] = None
+    window_type: Optional[int] = None
+    bin_count: Optional[int] = None
+    window_length: Optional[int] = None
+    overlap: Optional[int] = None
+    frame_align: Optional[int] = None
+    analysis_rate: Optional[float] = None
+    window_param: Optional[float] = None
+
     @property
     def encoding(self) -> str:
         if self.audio_format != EXTENSIBLE:
             return CODECS.get(self.audio_format, "Unknown")
 
-        return CODECS.get(self.subformat["audio_format"], "Unknown")
+        if self.mode != WAVE_FORMAT_PVOC_EX:
+            return CODECS.get(self.subformat["audio_format"], "Unknown")
+
+        return self.mode
 
 
 @dataclass
@@ -622,6 +643,19 @@ class SWave:
         speaker_layout = None
         subformat = None
 
+        version = None 
+        pvoc_size = None
+        word_format = None
+        analysis_format = None
+        source_format = None
+        window_type = None
+        bin_count = None
+        window_length = None
+        overlap = None
+        frame_align = None
+        analysis_rate = None
+        window_param = None
+
         if audio_format != 1 and size == 16:
             location = f"{FORMAT_CHUNK_LOCATION} -- AUDIO FORMAT / SIZE"
             error_message = "NON-PCM FORMATS MUST CONTAIN AN EXTENSION FIELD."
@@ -632,11 +666,6 @@ class SWave:
             mode = None
 
         elif audio_format == EXTENSIBLE:
-            if size != 40:
-                location = f"{FORMAT_CHUNK_LOCATION} -- AUDIO FORMAT / SIZE"
-                error_message = f"AUDIO FORMAT (EXTENSIBLE / 65534 / 0xFFFE) MUST BE SIZE 40 NOT {size}"
-                sanity.append(PerverseError(location, error_message))
-
             mode = WAVE_FORMAT_EXTENSIBLE
 
             extension_size, valid_bits_per_sample, cmask = struct.unpack(
@@ -653,9 +682,43 @@ class SWave:
             ]
 
             format_code = struct.unpack(f"{sign}H", sfmt[:2])[0]
-            guid = uuid.UUID(bytes=sfmt)
 
+            # TODO: is this correct for PVOC-EX?
+            guid = uuid.UUID(bytes=sfmt[:16])
             subformat = {"audio_format": format_code, "guid": str(guid)}
+
+            if str(guid) in PVOC_EX:
+                if size != 80:
+                    location = f"{FORMAT_CHUNK_LOCATION} -- PVOC-EX SIZE"
+                    error_message = (
+                        f"PVOC-EX FORMAT MUST ADHERE BE SIZE 80 NOT {size}."
+                    )
+                else:
+                    mode = WAVE_FORMAT_PVOC_EX
+                    (
+                        version,
+                        pvoc_size,
+                    ) = struct.unpack(f"{sign}II", data[40:48])
+
+                    index = 48 
+                    (
+                        word_format,
+                        analysis_format,
+                        source_format,
+                        window_type,
+                        bin_count,
+                        window_length,
+                        overlap,
+                        frame_align,
+                        analysis_rate,
+                        window_param,
+                    ) = struct.unpack(f"{sign}HHHHIIIIff", data[index:index + pvoc_size])
+
+            else:
+                if size != 40:
+                    location = f"{FORMAT_CHUNK_LOCATION} -- AUDIO FORMAT / SIZE"
+                    error_message = f"AUDIO FORMAT (EXTENSIBLE / 65534 / 0xFFFE) MUST BE SIZE 40 NOT {size}"
+                    sanity.append(PerverseError(location, error_message))
 
         elif size == 18:
             mode = WAVE_FORMAT_EXTENDED
@@ -693,6 +756,18 @@ class SWave:
             channel_mask=channel_mask,
             speaker_layout=speaker_layout,
             subformat=subformat,
+            version=version,
+            pvoc_size=pvoc_size,
+            word_format=word_format,
+            analysis_format=analysis_format,
+            source_format=source_format,
+            window_type=window_type,
+            bin_count=bin_count,
+            window_length=window_length,
+            overlap=overlap,
+            frame_align=frame_align,
+            analysis_rate=analysis_rate,
+            window_param=window_param
         )
 
     def _data(self, identifier: str, size: int, raw_data: bytes) -> WaveDataChunk:
