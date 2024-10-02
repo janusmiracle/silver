@@ -16,15 +16,75 @@ from .errors import PerverseError
 
 from src.utils import bo_symbol, sanitize_fallback, Stream
 
-
+# -: Chunk constants
 DEFAULT_ENCODING = "latin-1"
+
+# GUID for PVOC_EX format
 PVOC_EX = [
     "8312B9C2-2E6E-11d4-A824-DE5B96C3AB21",
     "c2b91283-6e2e-d411-a824-de5b96c3ab21",
 ]
 
+# Special format identifiers
+EXTENSIBLE = 65534
+CODING_HISTORY_LO = 602
 
-# Chunk identifiers -- Most are not used
+# Wave formats
+WAVE_FORMAT_PCM = "WAVE_FORMAT_PCM"
+WAVE_FORMAT_EXTENDED = "WAVE_FORMAT_EXTENDED"
+WAVE_FORMAT_EXTENSIBLE = "WAVE_FORMAT_EXTENSIBLE"
+WAVE_FORMAT_PVOC_EX = "WAVE_FORMAT_PVOC_EX"
+
+# Chunk locations
+FORMAT_CHUNK_LOCATION = "['fmt ' / FORMAT]"
+STRC_CHUNK_LOCATION = "['strc']"
+
+# DISP types
+CF_TEXT = 1
+CF_BITMAP = 2
+CF_METAFILE = 3
+CF_DIB = 8
+CF_PALETTE = 9
+
+CF_TYPES = {
+    CF_TEXT: "CF_TEXT",
+    CF_BITMAP: "CF_BITMAP",
+    CF_METAFILE: "CF_METAFILE",
+    CF_DIB: "CF_DIB",
+    CF_PALETTE: "CF_PALETTE",
+}
+
+
+# Storing here until official chunk test files are created.
+# Should output: WaveChnaChunk(
+#   identifier='chna',
+#   size=44,
+#   track_count=1,
+#   uid_count=1,
+#   track_ids=[
+#       AudioID(
+#           track_index=1,
+#           uid='ATU_00000001',
+#           track_reference='AT_00031001_01',
+#           pack_reference='AP_00031001',
+#           padded=True
+#           )
+#       ]
+#   )
+CHNA_TEST = b"\x01\x00\x01\x00\x01\x00\x41\x54\x55\x5f\x30\x30\x30\x30\x30\x30\x30\x31\x41\x54\x5f\x30\x30\x30\x33\x31\x30\x30\x31\x5f\x30\x31\x41\x50\x5f\x30\x30\x30\x33\x31\x30\x30\x31\x00"
+
+
+# Source: https://tech.ebu.ch/docs/tech/tech3285s3.pdf
+# TODO: fix the names for everything (e.g. position = audio_sample_frame_index?)
+# The decoding seems to work(?)
+UNKNOWN_POSITIONS = "0xffffffff"  # -1 -- 0xFFFFFFFF
+
+
+# Chunk locations
+FORMAT_CHUNK_LOCATION = "['fmt ' / FORMAT]"
+STRC_CHUNK_LOCATION = "['strc']"
+
+# Support chunk identifiers
 FMT_IDENTIFIER = "fmt "
 DATA_IDENTIFIER = "data"
 FACT_IDENTIFIER = "fact"
@@ -53,15 +113,6 @@ class GenericChunk:
     data: bytes
 
 
-EXTENSIBLE = 65534
-
-WAVE_FORMAT_PCM = "WAVE_FORMAT_PCM"
-WAVE_FORMAT_EXTENDED = "WAVE_FORMAT_EXTENDED"
-WAVE_FORMAT_EXTENSIBLE = "WAVE_FORMAT_EXTENSIBLE"
-WAVE_FORMAT_PVOC_EX = "WAVE_FORMAT_PVOC_EX"
-FORMAT_CHUNK_LOCATION = "['fmt ' / FORMAT]"
-
-
 @dataclass
 class WaveFormatChunk:
     # General chunk info
@@ -85,9 +136,37 @@ class WaveFormatChunk:
     valid_bits_per_sample: Optional[int] = None
     channel_mask: Optional[str] = None
     speaker_layout: Optional[List[str]] = None
-    subformat: Dict[int, str] = None
+    subformat: Optional[
+        Dict[str, Union[str, Dict[str, Optional[Union[int, float]]]]]
+    ] = None
 
-    # PVOC-EX info
+    def __post_init__(self):
+        if self.subformat is None:
+            self.subformat = {}
+
+        # Handle PVOC-EX info within the subformat dict
+        pvoc_ex_info = {
+            "version": self.version,
+            "pvoc_size": self.pvoc_size,
+            "word_format": self.word_format,
+            "analysis_format": self.analysis_format,
+            "source_format": self.source_format,
+            "window_type": self.window_type,
+            "bin_count": self.bin_count,
+            "window_length": self.window_length,
+            "overlap": self.overlap,
+            "frame_align": self.frame_align,
+            "analysis_rate": self.analysis_rate,
+            "window_param": self.window_param,
+        }
+
+        # Add PVOC-EX info to subformat if it exists
+        if any(value is not None for value in pvoc_ex_info.values()):
+            self.subformat["pvoc_ex"] = pvoc_ex_info
+        else:
+            self.subformat["pvoc_ex"] = None
+
+    # PVOC-EX fields
     version: Optional[int] = None
     pvoc_size: Optional[int] = None
     word_format: Optional[int] = None
@@ -167,18 +246,12 @@ class WaveInstrumentChunk:
     # fmt: off
     unshifted_note: int         # 0 - 127
     fine_tuning: int            # -50 - 50 in cents
-    gain: int                   # volume setting in decibels 
-    low_note: int               # 0 - 127 
-    high_note: int              # 0 - 127 
-    low_velocity: int           # 0 - 127 
+    gain: int                   # volume setting in decibels
+    low_note: int               # 0 - 127
+    high_note: int              # 0 - 127
+    low_velocity: int           # 0 - 127
     high_velocity: int          # 0 - 127
     # fmt: on
-
-
-# Source: https://tech.ebu.ch/docs/tech/tech3285s3.pdf
-# TODO: fix the names for everything (e.g. position = audio_sample_frame_index?)
-# The decoding seems to work(?)
-UNKNOWN_POSITIONS = "0xffffffff"  # -1 -- 0xFFFFFFFF
 
 
 @dataclass
@@ -195,14 +268,10 @@ class WavePeakEnvelopeChunk:
     frame_count: int
     # audio_frame_count: int    # block_size * peak_channel_count * peak_frame_count
     position: int
-    offset: int 
+    offset: int
     timestamp: str              # size 28 -- YYYY:MM:DD:hh:mm:ss:uuu -- 2000:08:24:13:55:40:967
-    reserved: str 
-    peak_envelope_data: bytes 
-
-
-# manufacturer = 0 == no specific manufacturer
-# loop_count = 0 == INFINITE
+    reserved: str
+    peak_envelope_data: bytes
 
 
 @dataclass
@@ -271,26 +340,30 @@ class WaveAcidChunk:
 class WaveCartChunk:
     identifier: str
     size: int
-    data: str
+    version: str = ""
+    title: str = ""
+    artist: str = ""
+    cut_id: str = ""
+    client_id: str = ""
+    category: str = ""
+    classification: str = ""
+    out_cue: str = ""
+    start_date: str = ""
+    start_time: str = ""
+    end_date: str = ""
+    end_time: str = ""
+    producer_app_id: str = ""
+    producer_app_version: str = ""
+    user_defined_text: str = ""
+    level_reference: int = 0
+    post_timers: list = None  # Initialize to None
+    reserved: str = None  # Reserved can be None
+    url: str = ""
+    tag_text: str = ""
 
-
-# Storing here until official chunk test files are created.
-# Should output: WaveChnaChunk(
-#   identifier='chna',
-#   size=44,
-#   track_count=1,
-#   uid_count=1,
-#   track_ids=[
-#       AudioID(
-#           track_index=1,
-#           uid='ATU_00000001',
-#           track_reference='AT_00031001_01',
-#           pack_reference='AP_00031001',
-#           padded=True
-#           )
-#       ]
-#   )
-CHNA_TEST = b"\x01\x00\x01\x00\x01\x00\x41\x54\x55\x5f\x30\x30\x30\x30\x30\x30\x30\x31\x41\x54\x5f\x30\x30\x30\x33\x31\x30\x30\x31\x5f\x30\x31\x41\x50\x5f\x30\x30\x30\x33\x31\x30\x30\x31\x00"
+    def __post_init__(self):
+        if self.post_timers is None:
+            self.post_timers = []
 
 
 @dataclass
@@ -318,8 +391,6 @@ class WaveChnaChunk:
 # Any insights or corrections are welcome.
 # No testing will be created for this chunk.
 
-STRC_CHUNK_LOCATION = "['strc']"
-
 
 @dataclass
 class SliceBlock:
@@ -345,9 +416,6 @@ class WaveStrcChunk:
     unknown5: int
     unknown6: int
     slice_blocks: List[SliceBlock]
-
-
-CODING_HISTORY_LO = 602
 
 
 @dataclass
@@ -435,39 +503,47 @@ class WaveXMLChunk:
 
 class SWave:
     """
-    WAVE stuff
+    Handle the reading and decoding of WAVE files.
+
+    This inncludes support for formats such as BW64, RF64, PVOC-EX, and more.
     """
 
     def __init__(self, stream: Stream):
-        """ """
-        self.stream = stream
+        """
+        Initialize the SWave instance with the provided stream and decode all chunks.
+        """
+        # fmt: off
+        self.stream = stream  # The stream from which the WAVE data is read.
 
         # -: Main: stores the decoded chunk data
-        self.chunks = []
-        self.fmt: Optional[WaveFormatChunk] = None
-        self.data: Optional[WaveDataChunk] = None
-        self.fact: Optional[WaveFactChunk] = None
-        self.info: Optional[WaveInfoChunk] = None
-        self.inst: Optional[WaveInstrumentChunk] = None
-        self.levl: Optional[WavePeakEnvelopeChunk] = None
-        self.smpl: Optional[WaveSampleChunk] = None
-        self.acid: Optional[WaveAcidChunk] = None
-        self.cart: Optional[WaveCartChunk] = None
-        self.chna: Optional[WaveChnaChunk] = None
-        self.strc: Optional[WaveStrcChunk] = None
-        self.bext: Optional[WaveBroadcastChunk] = None
-        self.disp: Optional[WaveDisplayChunk] = None
-        self.cue: Optional[WaveCueChunk] = None
-        self.adtl: Optional[WaveADTLChunk] = None
-        self.pmx: Optional[WaveXMLChunk] = None
-        self.axml: Optional[WaveXMLChunk] = None
-        self.ixml: Optional[WaveXMLChunk] = None
+        self.chunks = []  # List to store all decoded chunks.
+
+        # Decoded chunks initialized to None
+        self.acid: Optional[WaveAcidChunk] = None           # ACID chunk for loop information.
+        self.adtl: Optional[WaveADTLChunk] = None           # Associated Data List chunk.
+        self.axml: Optional[WaveXMLChunk] = None            # AXML chunk for extended metadata.
+        self.bext: Optional[WaveBroadcastChunk] = None      # Broadcast extension chunk.
+        self.cart: Optional[WaveCartChunk] = None           # CART chunk for broadcast metadata.
+        self.chna: Optional[WaveChnaChunk] = None           # Channel Assignment chunk for multichannel files.
+        self.cue: Optional[WaveCueChunk] = None             # Cue points chunk.
+        self.data: Optional[WaveDataChunk] = None           # Data chunk holding the audio samples.
+        self.disp: Optional[WaveDisplayChunk] = None        # Display chunk for textual display data.
+        self.fact: Optional[WaveFactChunk] = None           # Fact chunk, typically used in non-PCM data.
+        self.fmt: Optional[WaveFormatChunk] = None          # Format chunk defining the audio format.
+        self.info: Optional[WaveInfoChunk] = None           # Info chunk for additional metadata.
+        self.inst: Optional[WaveInstrumentChunk] = None     # Instrument chunk for musical instrument info.
+        self.ixml: Optional[WaveXMLChunk] = None            # IXML chunk for extended metadata.
+        self.levl: Optional[WavePeakEnvelopeChunk] = None   # Levl chunk for peak envelope data.
+        self.pmx: Optional[WaveXMLChunk] = None             # PMX chunk for XML metadata.
+        self.smpl: Optional[WaveSampleChunk] = None         # Sample chunk for sample loop information.
+        self.strc: Optional[WaveStrcChunk] = None           # Undocumented STRC chunk, related to ACID loops.
 
         # -: Initialize attributes
         self.all_chunks()
 
-        # -: Aux: stores chunk identifiers
+        # -: Aux: stores a list of chunk identifiers
         self.chunk_ids = list((id[0] for id in self.chunks))
+        # fmt: on
 
     def all_chunks(self):
         """
@@ -524,12 +600,18 @@ class SWave:
             if self.fmt is not None and self.data is not None:
                 self.data.frame_count = int(self.data.byte_count / self.fmt.block_align)
 
-    # fmt: off
-    def as_readable(self, truncate: bool = False, max_length: int = 100, indent: int = 2):
+    def as_readable(
+        self,
+        hide_null: bool = True,
+        truncate: bool = False,
+        max_length: int = 100,
+        indent: int = 2,
+    ):
         """Provides all processed and decoded data in a readable format."""
         base = {}
         chunk_counts = {}
 
+        # fmt: off
         CHUNK_ATTR = [
             "_pmx", "acid", "adtl", "axml", "bext", "cart", "chna", "cue", "data", "disp", "ds64", "fact", 
             "fmt", "info", "inst", "ixml", "levl", "smpl", "strc",
@@ -607,6 +689,7 @@ class SWave:
                     base[attr_name] = value.__dict__
 
         # Reorder so non-chunk keys are first
+        # TODO: figure out how to set hide_null
         ordered_base = OrderedDict()
         for key in NOT_CHUNK:
             if key in base:
@@ -643,7 +726,7 @@ class SWave:
         speaker_layout = None
         subformat = None
 
-        version = None 
+        version = None
         pvoc_size = None
         word_format = None
         analysis_format = None
@@ -690,9 +773,7 @@ class SWave:
             if str(guid) in PVOC_EX:
                 if size != 80:
                     location = f"{FORMAT_CHUNK_LOCATION} -- PVOC-EX SIZE"
-                    error_message = (
-                        f"PVOC-EX FORMAT MUST ADHERE BE SIZE 80 NOT {size}."
-                    )
+                    error_message = f"PVOC-EX FORMAT MUST ADHERE BE SIZE 80 NOT {size}."
                 else:
                     mode = WAVE_FORMAT_PVOC_EX
                     (
@@ -700,7 +781,7 @@ class SWave:
                         pvoc_size,
                     ) = struct.unpack(f"{sign}II", data[40:48])
 
-                    index = 48 
+                    index = 48
                     (
                         word_format,
                         analysis_format,
@@ -712,7 +793,9 @@ class SWave:
                         frame_align,
                         analysis_rate,
                         window_param,
-                    ) = struct.unpack(f"{sign}HHHHIIIIff", data[index:index + pvoc_size])
+                    ) = struct.unpack(
+                        f"{sign}HHHHIIIIff", data[index : index + pvoc_size]
+                    )
 
             else:
                 if size != 40:
@@ -767,7 +850,7 @@ class SWave:
             overlap=overlap,
             frame_align=frame_align,
             analysis_rate=analysis_rate,
-            window_param=window_param
+            window_param=window_param,
         )
 
     def _data(self, identifier: str, size: int, raw_data: bytes) -> WaveDataChunk:
@@ -1049,8 +1132,66 @@ class SWave:
 
     def _cart(self, identifier: str, size: int, data: bytes) -> WaveCartChunk:
         """Decoder for the ['cart' / CART] chunk."""
-        cleaned = sanitize_fallback(data, "ascii")
-        return WaveCartChunk(identifier=identifier, size=size, data=cleaned)
+        # Kinda messy, but it gets the job done
+        sign = bo_symbol(self.byteorder)
+        default_pattern = f"{sign}4s64s64s64s64s64s64s64s10s8s10s8s64s64s64sI"
+        unpacked_data = struct.unpack(
+            default_pattern, data[: struct.calcsize(default_pattern)]
+        )
+
+        offset = struct.calcsize(default_pattern)
+
+        post_timers = []
+        for _ in range(8):
+            timer_usage_id = data[offset : offset + 4].decode("latin1").strip("\x00")
+            offset += 4
+            timer_value = int.from_bytes(data[offset : offset + 4], "little")
+            offset += 4
+
+            post_timers.append((timer_usage_id, timer_value))
+
+            # Skip reserved
+            offset += 276
+
+            url = sanitize_fallback(data[offset : offset + 1024], "latin1")
+            offset += 1024
+
+            left_bytes = size - offset
+            tag_text = (
+                sanitize_fallback(data[offset : offset + left_bytes], "latin1")
+                if left_bytes > 0
+                else ""
+            )
+
+            # Sanitize and decode the previously unpacked data
+            unpacked_values = [
+                sanitize_fallback(value, "latin1") for value in unpacked_data[:15]
+            ]
+
+            return WaveCartChunk(
+                identifier=identifier,
+                size=size,
+                version=unpacked_values[0],
+                title=unpacked_values[1],
+                artist=unpacked_values[2],
+                cut_id=unpacked_values[3],
+                client_id=unpacked_values[4],
+                category=unpacked_values[5],
+                classification=unpacked_values[6],
+                out_cue=unpacked_values[7],
+                start_date=unpacked_values[8],
+                start_time=unpacked_values[9],
+                end_date=unpacked_values[10],
+                end_time=unpacked_values[11],
+                producer_app_id=unpacked_values[12],
+                producer_app_version=unpacked_values[13],
+                user_defined_text=unpacked_values[14],
+                level_reference=unpacked_data[15],
+                post_timers=post_timers,
+                reserved=None,
+                url=url,
+                tag_text=tag_text,
+            )
 
     def _chna(self, identifier: str, size: int, data: bytes) -> WaveChnaChunk:
         """Decoder for the ['chna' / CHNA] chunk."""
@@ -1183,8 +1324,12 @@ class SWave:
         origin_date = sanitize_fallback(origin_date, "ascii")
         origin_time = sanitize_fallback(origin_time, "ascii")
 
-        time_reference_low, time_reference_high, version = struct.unpack("IIH", stream.read(10)) 
-        smpte_umid = sanitize_fallback(struct.unpack("63s", stream.read(63))[0], "ascii")
+        time_reference_low, time_reference_high, version = struct.unpack(
+            "IIH", stream.read(10)
+        )
+        smpte_umid = sanitize_fallback(
+            struct.unpack("63s", stream.read(63))[0], "ascii"
+        )
 
         loudness_values = struct.unpack("5H", stream.read(10))
         (
@@ -1219,13 +1364,12 @@ class SWave:
 
     def _disp(self, identifier: str, size: int, data: bytes) -> WaveDisplayChunk:
         """Decoder for the ['DISP' / DISPLAY] chunk."""
-        # In INTEL format, so this shouldn't be needed
-        # sign = bo_symbol(self.byteorder)
-        cftype = struct.unpack("I", data[:4])
+        cftype_value = struct.unpack("I", data[:4])[0]
         all_that_remains = sanitize_fallback(data[4:], "latin-1")
+        cftype = CF_TYPES.get(cftype_value, "UNKNOWN_TYPE")
 
         return WaveDisplayChunk(
-            identifier=identifier, size=size, cftype=cftype[0], data=all_that_remains
+            identifier=identifier, size=size, cftype=cftype, data=all_that_remains
         )
 
     def _cue(self, identifier: str, size: int, data: bytes) -> WaveCueChunk:
@@ -1237,85 +1381,96 @@ class SWave:
         curr = 4
 
         for cue in range(point_count[0]):
-            (
-                point_id,
-                position,
-                chunk_id,
-                chunk_start,
-                block_start,
-                sample_start
-            ) = struct.unpack(f"{sign}IIIIII", data[curr:curr + 24])
+            (point_id, position, chunk_id, chunk_start, block_start, sample_start) = (
+                struct.unpack(f"{sign}IIIIII", data[curr : curr + 24])
+            )
 
-            cue_point = CuePoint(point_id, position, chunk_id, chunk_start, block_start, sample_start)
+            cue_point = CuePoint(
+                point_id, position, chunk_id, chunk_start, block_start, sample_start
+            )
 
             cue_points.append(cue_point)
-            curr += 24 
+            curr += 24
 
         return WaveCueChunk(
-            identifier=identifier, size=size, point_count=point_count[0], cue_points=cue_points
+            identifier=identifier,
+            size=size,
+            point_count=point_count[0],
+            cue_points=cue_points,
         )
 
-    def _adtl(self, identifier: str, size: int, data:bytes) -> WaveADTLChunk:
+    def _adtl(self, identifier: str, size: int, data: bytes) -> WaveADTLChunk:
         """Decoder for the ['adtl' / ASSOCIATED DATA] chunk."""
         sign = bo_symbol(self.byteorder)
         (sub_chunk_id, sub_chunk_size) = struct.unpack(f"{sign}4sI", data[:8])
 
         sub_chunk_id = sanitize_fallback(sub_chunk_id, "ascii")
 
-        if sub_chunk_id in ['labl', 'note']:
+        if sub_chunk_id in ["labl", "note"]:
             (cue_point_id) = struct.unpack(f"{sign}I", data[8:12])
             sub_data = sanitize_fallback(data[16:], "ascii")
 
             return WaveADTLChunk(
-                identifier=identifier, size=size, sub_chunk_id=sub_chunk_id, 
-                ascii_data=LabelNote(
-                    cue_point_id=cue_point_id, data=sub_data
-                )
+                identifier=identifier,
+                size=size,
+                sub_chunk_id=sub_chunk_id,
+                ascii_data=LabelNote(cue_point_id=cue_point_id, data=sub_data),
             )
 
         elif sub_chunk_id == "ltxt":
             print(sub_chunk_size)
-            (cue_point_id, sample_length, purpose_id, country, language, dialect, code_page) = struct.unpack(f"{sign}IIIHHHH", data[8:28])
+            (
+                cue_point_id,
+                sample_length,
+                purpose_id,
+                country,
+                language,
+                dialect,
+                code_page,
+            ) = struct.unpack(f"{sign}IIIHHHH", data[8:28])
 
             sub_data = sanitize_fallback(data[32:], "ascii")
 
             return WaveADTLChunk(
-                identifier=identifier, size=size, sub_chunk_id=sub_chunk_id, 
+                identifier=identifier,
+                size=size,
+                sub_chunk_id=sub_chunk_id,
                 ascii_data=LabeledText(
-                    cue_point_id=cue_point_id, sample_length=sample_length, purpose_id=purpose_id, country=country, language=language, dialect=dialect, code_page=code_page, data=sub_data
-                )
+                    cue_point_id=cue_point_id,
+                    sample_length=sample_length,
+                    purpose_id=purpose_id,
+                    country=country,
+                    language=language,
+                    dialect=dialect,
+                    code_page=code_page,
+                    data=sub_data,
+                ),
             )
 
-    def _pmx(self, identifier: str, size: int, data:bytes) -> WaveXMLChunk:
+    def _pmx(self, identifier: str, size: int, data: bytes) -> WaveXMLChunk:
         """Decoder for the ['_PMX' / XML] chunk."""
         # Yippeee online XML validator says this outputs valid XML
         pmx = sanitize_fallback(data, "utf-8")
         root = ET.fromstring(pmx)
-        xml = ET.tostring(root, encoding='utf-8', xml_declaration=True).decode('utf-8')
+        xml = ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
         xml = xml.replace("encoding='utf8'", "encoding='UTF-8'")
 
-        return WaveXMLChunk(
-            identifier=identifier, size=size, xml=xml
-        )
+        return WaveXMLChunk(identifier=identifier, size=size, xml=xml)
 
-    def _axml(self, identifier: str, size: int, data:bytes) -> WaveXMLChunk:
+    def _axml(self, identifier: str, size: int, data: bytes) -> WaveXMLChunk:
         """Decoder for the ['aXML' / XML] chunk."""
         axml = sanitize_fallback(data, "utf-8")
         root = ET.fromstring(axml)
-        xml = ET.tostring(root, encoding='utf-8', xml_declaration=True).decode('utf-8')
+        xml = ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
         xml = xml.replace("encoding='utf8'", "encoding='UTF-8'")
 
-        return WaveXMLChunk(
-            identifier=identifier, size=size, xml=xml
-        )
+        return WaveXMLChunk(identifier=identifier, size=size, xml=xml)
 
-    def _ixml(self, identifier: str, size: int, data:bytes) -> WaveXMLChunk:
+    def _ixml(self, identifier: str, size: int, data: bytes) -> WaveXMLChunk:
         """Decoder for the ['iXML' / XML] chunk."""
         ixml = sanitize_fallback(data, "utf-8")
         root = ET.fromstring(ixml)
-        xml = ET.tostring(root, encoding='utf-8', xml_declaration=True).decode('utf-8')
+        xml = ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
         xml = xml.replace("encoding='utf8'", "encoding='UTF-8'")
 
-        return WaveXMLChunk(
-            identifier=identifier, size=size, xml=xml
-        )
+        return WaveXMLChunk(identifier=identifier, size=size, xml=xml)
