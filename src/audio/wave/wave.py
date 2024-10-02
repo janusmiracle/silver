@@ -602,15 +602,30 @@ class SWave:
 
     def as_readable(
         self,
-        hide_null: bool = True,
-        truncate: bool = False,
-        max_length: int = 100,
+        purge: bool = True,
+        to_json: bool = False,
         indent: int = 2,
+        truncate: bool = False,
+        limit: int = 100,
     ):
-        """Provides all processed and decoded data in a readable format."""
+        """
+        Provides all processed and decoded data in a readable format.
+
+        Parameters
+        ----------
+            purge (bool):
+                Determines if None, empty strings, and empty lists should be excluded from the output. Defaults to True.
+            to_json (bool):
+                Indicates whether the output should be formatted as JSON. Defaults to False (returns a dictionary).
+            indent (int):
+                Specifies the indentation level for the JSON output, only applicable if to_json is True. Defaults to 2.
+            truncate (bool):
+                Specifies if the output values should be truncated for large chunks. Defaults to False.
+            limit (int):
+                Sets the maximum number of characters to keep for truncation, only applicable when truncate is True. Defaults to 100.
+        """
         base = {}
         chunk_counts = {}
-
         # fmt: off
         CHUNK_ATTR = [
             "_pmx", "acid", "adtl", "axml", "bext", "cart", "chna", "cue", "data", "disp", "ds64", "fact", 
@@ -633,13 +648,6 @@ class SWave:
             if value is None or attr in IGNORE_ATTR:
                 continue
 
-            if hide_null and (
-                value is None
-                or value == ""
-                or (isinstance(value, dict) and not value)
-                or (isinstance(value, list) and not value)
-            ):
-                continue
             chunk_type = (
                 attr
                 if attr in NOT_CHUNK
@@ -669,17 +677,15 @@ class SWave:
                                 field_value.decode("utf-8", errors="ignore")
                                 if not truncate
                                 else (
-                                    "..."
-                                    if len(field_value) > max_length
-                                    else field_value
+                                    "..." if len(field_value) > limit else field_value
                                 )
                             )
                         elif (
                             isinstance(field_value, str)
                             and truncate
-                            and len(field_value) > max_length
+                            and len(field_value) > limit
                         ):
-                            field_value = field_value[:max_length] + "..."
+                            field_value = field_value[:limit] + "..."
 
                         value.__dict__[field_name] = field_value
 
@@ -700,10 +706,10 @@ class SWave:
                 else:
                     base[attr_name] = value.__dict__
 
-        base = del_null(base) if hide_null else base
+        base = del_null(base) if purge else base
 
         # Reorder so non-chunk keys are first
-        ordered_base = OrderedDict()
+        ordered_base = {}
         for key in NOT_CHUNK:
             if key in base:
                 ordered_base[key] = base[key]
@@ -712,7 +718,10 @@ class SWave:
             if key not in ordered_base:
                 ordered_base[key] = base[key]
 
-        return json.dumps(ordered_base, indent=indent)
+        if to_json:
+            return json.dumps(ordered_base, indent=indent)
+        else:
+            return ordered_base
 
     # -: Onwards, chunk decoders
     def _fmt(self, identifier: str, size: int, data: bytes) -> WaveFormatChunk:
