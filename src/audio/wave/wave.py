@@ -14,7 +14,7 @@ from ._storage import CODECS, GENERIC_CHANNEL_MASK_MAP
 from .chunky import Chunky
 from .errors import PerverseError
 
-from src.utils import bo_symbol, sanitize_fallback, Stream
+from src.utils import bo_symbol, del_null, sanitize_fallback, Stream
 
 # -: Chunk constants
 DEFAULT_ENCODING = "latin-1"
@@ -505,7 +505,7 @@ class SWave:
     """
     Handle the reading and decoding of WAVE files.
 
-    This inncludes support for formats such as BW64, RF64, PVOC-EX, and more.
+    This includes support for formats such as BW64, RF64, PVOC-EX, and more.
     """
 
     def __init__(self, stream: Stream):
@@ -627,13 +627,23 @@ class SWave:
             "master", "formtype", "byteorder", "bitrate",
             "bitrate_long", "chunk_ids",
         ]
+        # fmt: on
 
         for attr, value in self.__dict__.items():
             if value is None or attr in IGNORE_ATTR:
                 continue
 
+            if hide_null and (
+                value is None
+                or value == ""
+                or (isinstance(value, dict) and not value)
+                or (isinstance(value, list) and not value)
+            ):
+                continue
             chunk_type = (
-                attr if attr in NOT_CHUNK else (attr[:4] if attr[:3] != "fmt" else "fmt")
+                attr
+                if attr in NOT_CHUNK
+                else (attr[:4] if attr[:3] != "fmt" else "fmt")
             )
 
             if chunk_type not in CHUNK_ATTR and chunk_type in IGNORE_ATTR:
@@ -659,7 +669,9 @@ class SWave:
                                 field_value.decode("utf-8", errors="ignore")
                                 if not truncate
                                 else (
-                                    "..." if len(field_value) > max_length else field_value
+                                    "..."
+                                    if len(field_value) > max_length
+                                    else field_value
                                 )
                             )
                         elif (
@@ -688,8 +700,9 @@ class SWave:
                 else:
                     base[attr_name] = value.__dict__
 
+        base = del_null(base) if hide_null else base
+
         # Reorder so non-chunk keys are first
-        # TODO: figure out how to set hide_null
         ordered_base = OrderedDict()
         for key in NOT_CHUNK:
             if key in base:
@@ -699,7 +712,6 @@ class SWave:
             if key not in ordered_base:
                 ordered_base[key] = base[key]
 
-        # fmt: on
         return json.dumps(ordered_base, indent=indent)
 
     # -: Onwards, chunk decoders

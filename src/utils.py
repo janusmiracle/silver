@@ -3,7 +3,7 @@
 import io
 
 from pathlib import Path
-from typing import Union
+from typing import Dict, Union
 
 Source = Union[bytes, io.BufferedReader, Path, str]
 Stream = Union[io.BytesIO, io.BufferedReader]
@@ -18,6 +18,19 @@ def bo_symbol(byteorder: str) -> str:
             return "<"
         case _:
             raise ValueError("Invalid byteorder. Use 'big' or 'little'.")
+
+
+def del_null(base: Dict) -> Dict:
+    """
+    Removes None, empty strings, and empty list values from a given dictionary.
+    """
+    for key, value in list(base.items()):
+        if value is None or value == "" or value == []:
+            del base[key]
+        elif isinstance(value, dict):
+            del_null(value)
+
+    return base
 
 
 def sanitize(to_clean: bytes) -> bytes:
