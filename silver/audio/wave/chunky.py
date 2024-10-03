@@ -5,6 +5,10 @@ from typing import Generator, Tuple
 FALSE_SIZE = "0xffffffff"  # -1 / "0xFFFFFFFF"
 NULL_IDENTIFIER = "\x00\x00\x00\x00"
 
+IGNORE_CHUNKS = ["data", "JUNK", "FLLR", "PAD "]
+
+OPTIONAL_IGNORE_CHUNKS = ["minf", "elm1", "regn", "umid", "elmo", "DGDA", "ovwf"]
+
 
 class Chunky:
     """
@@ -35,7 +39,9 @@ class Chunky:
         else:
             raise ValueError(f"Invalid master chunk identifier: {master}")
 
-    def get_chunks(self, stream) -> Generator[Tuple[str, int, bytes], None, None]:
+    def get_chunks(
+        self, stream, ignore: bool = False
+    ) -> Generator[Tuple[str, int, bytes], None, None]:
         """
         Retrieves and yields all chunks from a given RIFF-based WAV-like stream.
         """
@@ -56,14 +62,14 @@ class Chunky:
 
         if master_size == FALSE_SIZE:
             # Size is set to -1, true size is stored in ds64
-            yield from self._rf64(stream, byteorder)
+            yield from self._rf64(stream, byteorder, ignore)
         elif master in ["RIFF", "RIFX", "FIRR", "BW64"]:
             yield from self._riff(stream, byteorder)
         else:
             raise ValueError(f"Unknown or unsupported format: {master}")
 
     def _riff(
-        self, stream, byteorder: str
+        self, stream, byteorder: str, ignore: bool
     ) -> Generator[Tuple[str, int, bytes], None, None]:
         """
         Yields chunks from a valid RIFF stream.
@@ -93,14 +99,24 @@ class Chunky:
             if chunk_size % 2 != 0 and chunk_identifier != "bext":
                 chunk_size += 1
 
-            chunk_data = stream.read(chunk_size)
+            # The chunks in IGNORE_CHUNKS have unimportant info
+            # E.g. just knowing the size of the chunk is enough
+            # OPTIONAL_IGNORE_CHUNKS, on the other hand, are moreso
+            # directed at ProTool chunks that have no specifications
+            if chunk_identifier in IGNORE_CHUNKS or (
+                ignore and chunk_identifier in OPTIONAL_IGNORE_CHUNKS
+            ):
+                chunk_data = ""
+            else:
+                chunk_data = stream.read(chunk_size)
+
             yield (chunk_identifier, chunk_size, chunk_data)
 
             # Skip to the start of the next chunk
             stream.seek(chunk_size - len(chunk_data), 1)
 
     def _rf64(
-        self, stream, byteorder: str
+        self, stream, byteorder: str, ignore: bool
     ) -> Generator[Tuple[str, int, bytes], None, None]:
         """
         Yields chunks from an RF64 stream where the RIFF size is set to -1
@@ -136,6 +152,7 @@ class Chunky:
         table_entry_count = int.from_bytes(table_entry_count_bytes, byteorder)
 
         # Not accounting for table_entry_count > 0
+        # Once a test file is procured, it will be done.
 
         self.ds64 = {
             "chunk_identifier": ds64_identifier,
@@ -168,7 +185,6 @@ class Chunky:
                 # For cases other than default, the true sizes
                 # of the chunks are stored in the 'ds64' chunk
                 case "data":
-                    # TODO: Skipping the 'data' chunk takes a long time
                     stream.read(4)
                     chunk_size = data_low_size + (data_high_size << 32)
                 case "fact":
@@ -184,7 +200,15 @@ class Chunky:
             if chunk_size % 2 != 0 and chunk_identifier != "bext":
                 chunk_size += 1
 
-            chunk_data = stream.read(chunk_size)
+            # Solves the performance issue.
+            # The stream.read() call on an RF64 file is obscene.
+            # The chunk_data is never used after being returned, anyways.
+            if chunk_identifier in IGNORE_CHUNKS or (
+                ignore and chunk_identifier in OPTIONAL_IGNORE_CHUNKS
+            ):
+                chunk_data = ""
+            else:
+                chunk_data = stream.read(chunk_size)
 
             if chunk_identifier != NULL_IDENTIFIER:
                 yield (chunk_identifier, chunk_size, chunk_data)

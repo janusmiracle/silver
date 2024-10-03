@@ -491,6 +491,7 @@ class SWave:
     def __init__(
         self,
         stream: Stream,
+        ignore: bool = False,
         purge: bool = True,
         to_json: bool = False,
         indent: int = 2,
@@ -504,6 +505,8 @@ class SWave:
         ----------
             stream (io.BufferedReader)
                 The stream from which the WAVE data is read.
+            ignore (bool):
+                Determines if undocumented/unimportant chunk data should be ignored. Defaults to False.
             purge (bool):
                 Determines if None, empty strings, and empty lists should be excluded from the output. Defaults to True.
             to_json (bool):
@@ -517,7 +520,8 @@ class SWave:
 
         """
         # fmt: off
-        self.stream = stream 
+        self.stream = stream
+        self.ignore = ignore
         self.purge = purge
         self.to_json = to_json
         self.indent = indent
@@ -562,7 +566,7 @@ class SWave:
         chunky = Chunky()
         chunk_counts = {}
 
-        for identifier, size, data in chunky.get_chunks(self.stream):
+        for identifier, size, data in chunky.get_chunks(self.stream, self.ignore):
             # Set some values for the future
             self.byteorder = chunky.byteorder
             self.master = chunky.master
@@ -624,8 +628,9 @@ class SWave:
         ]
 
         IGNORE_ATTR = [
-            "__annotations__", "__class__", "__dict__", "__doc__", 
-            "__init__", "__module__", "__weakref__", "chunks", "stream",
+            "__annotations__", "__class__", "__dict__", "__doc__",
+            "__init__", "__module__", "__weakref__", "chunks", "stream", "purge", "to_json", "indent",
+            "truncate", "limit"
         ]
 
         # Sorted based on importance rather than alphabetically

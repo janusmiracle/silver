@@ -21,9 +21,9 @@ def test_rifx_detect():
     assert f.base == "WAVE" and f.container == "RIFX" and f.endian == "big"
 
 
-# def test_rf64_detect():
-# with gzip.open(RF64_WAVE, "rb") as f:
-# content = f.read()
-# silver = Silver(content)
-# f = silver.format
-# assert f.base == "WAVE" and f.container == "RF64" and f.endian == "little"
+def test_rf64_detect():
+    with gzip.open(RF64_WAVE, "rb") as f:
+        content = f.read()
+        silver = Silver(content)
+        f = silver.format
+        assert f.base == "WAVE" and f.container == "RF64" and f.endian == "little"

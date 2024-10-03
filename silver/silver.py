@@ -24,6 +24,7 @@ class Silver:
     def __init__(
         self,
         source: Source,
+        ignore: bool = False,
         purge: bool = True,
         to_json: bool = False,
         indent: bool = False,
@@ -38,6 +39,7 @@ class Silver:
 
         # -: Parameters
         self.source = source
+        self.ignore = ignore
         self.purge = purge
         self.to_json = to_json
         self.indent = indent
@@ -103,6 +105,7 @@ class Silver:
             case "WAVE":
                 self.wave = SWave(
                     self.stream,
+                    ignore=self.ignore,
                     purge=self.purge,
                     to_json=self.to_json,
                     indent=self.indent,
