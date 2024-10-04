@@ -64,7 +64,7 @@ class Chunky:
             # Size is set to -1, true size is stored in ds64
             yield from self._rf64(stream, byteorder, ignore)
         elif master in ["RIFF", "RIFX", "FIRR", "BW64"]:
-            yield from self._riff(stream, byteorder)
+            yield from self._riff(stream, byteorder, ignore)
         else:
             raise ValueError(f"Unknown or unsupported format: {master}")
 

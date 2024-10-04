@@ -481,9 +481,16 @@ class WaveXMLChunk:
     xml: str
 
 
+@dataclass
+class WaveMD5Chunk:
+    identifier: str
+    size: int
+    checksum: int
+
+
 class SWave:
     """
-    Handle the reading and decoding of WAVE files.
+    Reading and decoding of WAVE files.
 
     This includes support for formats such as BW64, RF64, PVOC-EX, and more.
     """
@@ -548,8 +555,10 @@ class SWave:
         self.inst: Optional[WaveInstrumentChunk] = None     # Instrument chunk for musical instrument info.
         self.ixml: Optional[WaveXMLChunk] = None            # IXML chunk for extended metadata.
         self.levl: Optional[WavePeakEnvelopeChunk] = None   # Levl chunk for peak envelope data.
+        self.md5: Optional[WaveMD5Chunk] = None             # MD5 checksum of data chunk.
         self.pmx: Optional[WaveXMLChunk] = None             # PMX chunk for XML metadata.
         self.smpl: Optional[WaveSampleChunk] = None         # Sample chunk for sample loop information.
+        # self.r64m: Optional[WaveR64mChunk] = None           # R64m chunk.
         self.strc: Optional[WaveStrcChunk] = None           # Undocumented STRC chunk, related to ACID loops.
 
         # -: Initialize attributes
@@ -624,7 +633,7 @@ class SWave:
         # fmt: off
         CHUNK_ATTR = [
             "_pmx", "acid", "adtl", "axml", "bext", "cart", "chna", "cue", "data", "disp", "ds64", "fact", 
-            "fmt", "info", "inst", "ixml", "levl", "smpl", "strc",
+            "fmt", "info", "inst", "ixml", "levl", "md5", "smpl", "strc",
         ]
 
         IGNORE_ATTR = [
@@ -1498,3 +1507,9 @@ class SWave:
         xml = xml.replace("encoding='utf8'", "encoding='UTF-8'")
 
         return WaveXMLChunk(identifier=identifier, size=size, xml=xml)
+
+    def _md5(self, identifier: str, size: int, data: bytes) -> WaveMD5Chunk:
+        """Decoder for the ['MD5 ' / MD5 CHECKSUM] chunk."""
+        # Size should be 16 bytes, but this is safer
+        checksum = int.from_bytes(data[:16], byteorder=self.byteorder)
+        return WaveMD5Chunk(identifier=identifier, size=size, checksum=checksum)
