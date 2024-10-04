@@ -17,8 +17,9 @@ class SFormat:
     Detects the format of a given binary stream based on predefined signatures.
     """
 
-    def __init__(self, to_json: bool = False):
+    def __init__(self, to_json: bool = False, indent: int = 2):
         self.to_json = to_json
+        self.indent = indent
 
     def detect(self, stream: Stream, check_format: Optional[str] = None) -> str:
         """
@@ -62,6 +63,6 @@ class SFormat:
         """Converts the provided identity to the format set to True."""
         # Give JSON precedence over Dict if both are set to True
         if self.to_json:
-            return json.dumps(identity.__dict__, indent=2)
+            return (identity, json.dumps(identity.__dict__, indent=self.indent))
         else:
-            return identity
+            return (identity, identity)

@@ -27,7 +27,7 @@ class Silver:
         ignore: bool = False,
         purge: bool = True,
         to_json: bool = False,
-        indent: bool = False,
+        indent: int = 2,
         truncate: bool = False,
         limit: int = 2,
         check_format: str = None,
@@ -95,13 +95,13 @@ class Silver:
         else:
             raise TypeError("Source must be a file path, file-like object, or URL.")
 
-        sf = SFormat(self.to_json)
-        self.format = sf.detect(self.stream, self.to_search)
+        sf = SFormat(self.to_json, self.indent)
+        identity, self.format = sf.detect(self.stream, self.to_search)
 
         self.stype = self.stype
         self.source_type = InputSource(self.stype)
 
-        match self.format.base:
+        match identity.base:
             case "WAVE":
                 self.wave = SWave(
                     self.stream,
