@@ -931,7 +931,7 @@ class SWave:
                 data_bytes = stream.read(tag_size)
                 tag_data = sanitize_fallback(data_bytes, "ascii")
                 if not tag_data:
-                    tag_data = sanitize_fallback(data_bytes, "latin-1")
+                    tag_data = sanitize_fallback(data_bytes, DEFAULT_ENCODING)
 
                 yield (tag_identifier, tag_size, tag_data)
 
@@ -1028,7 +1028,7 @@ class SWave:
 
         # The timestamp and reserved spaces are always 28 bytes and 60 bytes respectively
         timestamp = sanitize_fallback(data[32:60], "unicode-escape")
-        reserved = sanitize_fallback(data[60:120], "latin-1")
+        reserved = sanitize_fallback(data[60:120], DEFAULT_ENCODING)
 
         # Everything after reserved is the peak envelope data
         peak_envelope_data = data[120:]
@@ -1174,7 +1174,9 @@ class SWave:
 
         post_timers = []
         for _ in range(8):
-            timer_usage_id = data[offset : offset + 4].decode("latin1").strip("\x00")
+            timer_usage_id = (
+                data[offset : offset + 4].decode(DEFAULT_ENCODING).strip("\x00")
+            )
             offset += 4
             timer_value = int.from_bytes(data[offset : offset + 4], "little")
             offset += 4
@@ -1184,19 +1186,20 @@ class SWave:
             # Skip reserved
             offset += 276
 
-            url = sanitize_fallback(data[offset : offset + 1024], "latin1")
+            url = sanitize_fallback(data[offset : offset + 1024], DEFAULT_ENCODING)
             offset += 1024
 
             left_bytes = size - offset
             tag_text = (
-                sanitize_fallback(data[offset : offset + left_bytes], "latin1")
+                sanitize_fallback(data[offset : offset + left_bytes], DEFAULT_ENCODING)
                 if left_bytes > 0
                 else ""
             )
 
             # Sanitize and decode the previously unpacked data
             unpacked_values = [
-                sanitize_fallback(value, "latin1") for value in unpacked_data[:15]
+                sanitize_fallback(value, DEFAULT_ENCODING)
+                for value in unpacked_data[:15]
             ]
 
             return WaveCartChunk(
@@ -1396,7 +1399,7 @@ class SWave:
     def _disp(self, identifier: str, size: int, data: bytes) -> WaveDisplayChunk:
         """Decoder for the ['DISP' / DISPLAY] chunk."""
         cftype_value = struct.unpack("I", data[:4])[0]
-        all_that_remains = sanitize_fallback(data[4:], "latin-1")
+        all_that_remains = sanitize_fallback(data[4:], DEFAULT_ENCODING)
         cftype = CF_TYPES.get(cftype_value, "UNKNOWN_TYPE")
 
         return WaveDisplayChunk(
